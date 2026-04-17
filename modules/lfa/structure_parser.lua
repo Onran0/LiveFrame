@@ -41,7 +41,7 @@ result format:
 
 local delimiters = " \t"
 local newLineChars = "\r\n"
-local elementEndChars = "@\n"
+local elementEndChars = "@{\n"
 local numberChars = '0123456789.'
 
 local M = { }
@@ -99,15 +99,7 @@ local function parseAttributeValue(value)
     end
 end
 
-function M.parse(text, offset, length)
-    local endIndex
-
-    if length then
-        endIndex = length + (offset or 0)
-    else
-        endIndex = #text
-    end
-
+function M.parse(text, offset, hasParent)
     local result = { }
 
     local parsingElement = false
@@ -121,14 +113,13 @@ function M.parse(text, offset, length)
     local elementType
     local elementAttributes = { }
 
-    local elementChildren
-
     local inQuote = false
     local inBrackets = false
 
+    local length = #text
     local i = offset or 1
 
-    while i <= endIndex do
+    while i <= length do
         local char = text[i]
 
         if parsingAttributeName then
@@ -209,6 +200,12 @@ function M.parse(text, offset, length)
                 end
             elseif not contains(delimiters, char) then
                 if contains(elementEndChars, char) then
+                    local elementChildren
+
+                    if char == '{' then
+                        elementChildren, i = M.parse(text, i + 1, true)
+                    end
+
                     table.insert(result, {
                         type = elementType,
                         attributes = elementAttributes,
@@ -217,7 +214,6 @@ function M.parse(text, offset, length)
 
                     elementType = nil
                     elementAttributes = { }
-                    elementChildren = nil
 
                     parsingElement = false
                     i = i - 1
@@ -230,7 +226,11 @@ function M.parse(text, offset, length)
             if char == '@' then
                 parsingElement = true
             elseif not contains(delimiters, char) and not contains(newLineChars, char) then
-                error(i .. ": unexpected character '" .. char .. "`")
+                if char == '}' and hasParent then
+                    return result, i + 1
+                else
+                    error(i .. ": unexpected character '" .. char .. "`")
+                end
             end
         end
 

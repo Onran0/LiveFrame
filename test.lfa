@@ -1,1 +1,25 @@
-@test value 0.23 test  ("0.5rc()", 2.123, "9293", false, 0.5) meow false
+@animation name "test" {
+    @keyframe time 0 {
+        @scope rotation-interp "squad" {
+            @bone name "spine" {
+                @rotation value (0, 0, 0)
+            }
+
+            @bone name "head" {
+                @rotation value (0, 0, 0)
+            }
+        }
+    }
+
+    @keyframe time 1 {
+        @scope rotation-interp "squad" {
+            @bone name "spine" {
+                @rotation value (0, 90, 0)
+            }
+
+            @bone name "head" {
+                @rotation value (0, 0, 90)
+            }
+        }
+    }
+}
