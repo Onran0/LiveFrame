@@ -200,17 +200,24 @@ function M.parse(text, offset, hasParent)
                 end
             elseif not contains(delimiters, char) then
                 if contains(elementEndChars, char) then
-                    local elementChildren
+                    local elementTable = {
+                        type = elementType,
+                        attributes = elementAttributes
+                    }
 
                     if char == '{' then
-                        elementChildren, i = M.parse(text, i + 1, true)
+                        local elementChildren, newOffset = M.parse(text, i + 1, true)
+
+                        i = newOffset
+
+                        for j = 1, #elementChildren do
+                            elementChildren[j].parent = elementTable
+                        end
+
+                        elementTable.children = elementChildren
                     end
 
-                    table.insert(result, {
-                        type = elementType,
-                        attributes = elementAttributes,
-                        children = elementChildren
-                    })
+                    table.insert(result, elementTable)
 
                     elementType = nil
                     elementAttributes = { }
