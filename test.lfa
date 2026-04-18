@@ -1,5 +1,5 @@
 @animation name "test" {
-    @keyframe time 1 {
+    @keyframe time 0 {
         @scope rotation-interp "squad" interp "cubic-spline" {
             @bone name "spine" {
                 @position value (0, 1, 2)
@@ -8,7 +8,7 @@
         }
     }
 
-    @keyframe time 1.1 {
+    @keyframe time 1 {
         @scope rotation-interp "squad" interp "cubic-spline" {
             @bone name "spine" {
                 @position value (2, 3, 5) interp "lerp"
