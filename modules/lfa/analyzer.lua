@@ -1,3 +1,82 @@
+--[[
+lfaTable - is a validated and fully correct table with animations and
+custom interpolations.
+
+all values are specified explicitly, with no defaults.
+the @scope element is completely stripped, and any interpolation attributes
+are finalized to the interpolation table in each transformation.
+
+all this is for the convenience of the final LFA animation loader and
+predictable behavior.
+
+output lfaTable structure:
+{
+    interps = {
+        ["custom"] = {
+            id = "custom",
+            type = "squad",
+            fields = {
+                ["in-control"] = { 0, -1, 0, 1 },
+                ["out-control"] = { 0, -1, 0, 1 }
+            }
+        }
+    },
+
+    animations = {
+        ["main"] = {
+            name = "main",
+            eulerOrder = "xyz",
+            keyframes = {
+                {
+                    time = 0,
+                    bones = {
+                        {
+                            name = "spine",
+                            position = {
+                                value = { 0, 0, 0 },
+                                interpolation = {
+                                    input = "lerp",
+                                    output = "lerp"
+                                }
+                            },
+                            rotation = {
+                                value = { 0, 0, 0 },
+                                interpolation = {
+                                    input = "nlerp",
+                                    output = "slerp"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    time = 1,
+                    bones = {
+                        {
+                            name = "spine",
+                            position = {
+                                value = { 1, 1, 1 },
+                                interpolation = {
+                                    input = "lerp",
+                                    output = "lerp"
+                                }
+                            },
+                            rotation = {
+                                value = { 45, 45, 90 },
+                                interpolation = {
+                                    input = "nlerp",
+                                    output = "slerp"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+]]--
+
 -- elements types
 
 local INTERP_TYPE = "interp"
