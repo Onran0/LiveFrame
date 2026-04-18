@@ -662,6 +662,10 @@ local function analyzeElementSpecial(element, lfaTable)
                 error(errorPrefix .. "keyframe with time " .. time .. " already declared")
             end
 
+            if previousTime == -1 and time > 0 then
+                error(errorPrefix .. "first keyframe time must be 0")
+            end
+
             previousTime = time
 
             animationByElement[keyframe] = animationTable
