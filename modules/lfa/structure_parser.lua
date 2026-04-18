@@ -42,7 +42,7 @@ result format:
 local delimiters = " \t"
 local newLineChars = "\r\n"
 local elementEndChars = "@{\n"
-local numberChars = '0123456789.'
+local numberChars = '-0123456789.'
 
 local M = { }
 
