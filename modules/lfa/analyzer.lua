@@ -241,7 +241,7 @@ local function validateAndGetValueType(value)
     else error('invalid value type: ' .. value) end
 end
 
-local function analyzeElementSpecial(element, meta)
+local function analyzeElementSpecial(element, lfaTable)
     --- interpolation types analyze ---
     if element.type == SCOPE_TYPE or
        element.type == BONE_TYPE or
@@ -254,10 +254,10 @@ local function analyzeElementSpecial(element, meta)
                 local interpAttr = element.attributes[attributesList[i]]
 
                 if interpAttr and not table.has(defaultTypes, interpAttr) then
-                    if not meta.interps[interpAttr] then
+                    if not lfaTable.interps[interpAttr] then
                         error("unknown interpolation '" .. interpAttr .. "'")
                     else
-                        if not table.has(defaultTypes, meta.interps[interpAttr].type) then
+                        if not table.has(defaultTypes, lfaTable.interps[interpAttr].type) then
                             error("custom interpolation '" .. interpAttr .. "' can't be used for " .. usingScope)
                         end
                     end
@@ -278,7 +278,7 @@ local function analyzeElementSpecial(element, meta)
     if element.type == INTERP_TYPE then
         local id = element.attributes[ATTR_ID]
 
-        if meta.interps[id] then
+        if lfaTable.interps[id] then
             error("custom interp with id '" .. id .. "' already declared")
         end
 
@@ -325,15 +325,15 @@ local function analyzeElementSpecial(element, meta)
             interpTable.fields[name] = value
         end
 
-        meta.interps[id] = interpTable
+        lfaTable.interps[id] = interpTable
     elseif
         element.type == POSITION_TYPE or
         element.type == ROTATION_TYPE or
         element.type == SCALE_TYPE
     then
-        local animation = meta.temp.animationByElement[element]
-        local keyframe = meta.temp.keyframeByElement[element]
-        local tempBone = meta.temp.boneByTransform[element]
+        local animation = lfaTable.temp.animationByElement[element]
+        local keyframe = lfaTable.temp.keyframeByElement[element]
+        local tempBone = lfaTable.temp.boneByTransform[element]
         local bone = keyframe.bones[tempBone.name]
 
         local errorPrefix = "(animation: " .. animation.name ..
@@ -370,11 +370,11 @@ local function analyzeElementSpecial(element, meta)
 
         bone[element.type] = transformTable
     elseif element.type == BONE_TYPE then
-        local animationByElement = meta.temp.animationByElement
-        local keyframeByElement = meta.temp.keyframeByElement
+        local animationByElement = lfaTable.temp.animationByElement
+        local keyframeByElement = lfaTable.temp.keyframeByElement
 
-        local animation = meta.temp.animationByElement[element]
-        local keyframe = meta.temp.keyframeByElement[element]
+        local animation = lfaTable.temp.animationByElement[element]
+        local keyframe = lfaTable.temp.keyframeByElement[element]
 
         local name = element.attributes[ATTR_NAME]
 
@@ -389,7 +389,7 @@ local function analyzeElementSpecial(element, meta)
             name = name
         }
 
-        local parentScope = meta.temp.scopeByBone[element] or { }
+        local parentScope = lfaTable.temp.scopeByBone[element] or { }
 
         local attrs = element.attributes
 
@@ -428,16 +428,16 @@ local function analyzeElementSpecial(element, meta)
             error(errorPrefix .. " bone can't be declared without any transforms (position, rotation or scale)")
         end
 
-        meta.temp.boneByTransform = table.merge(
-                meta.temp.boneByTransform or {},
+        lfaTable.temp.boneByTransform = table.merge(
+                lfaTable.temp.boneByTransform or {},
                 boneByTransform
         )
     elseif element.type == SCOPE_TYPE then
-        local animationByElement = meta.temp.animationByElement
-        local keyframeByElement = meta.temp.keyframeByElement
+        local animationByElement = lfaTable.temp.animationByElement
+        local keyframeByElement = lfaTable.temp.keyframeByElement
 
-        local animation = meta.temp.animationByElement[element]
-        local keyframe = meta.temp.keyframeByElement[element]
+        local animation = lfaTable.temp.animationByElement[element]
+        local keyframe = lfaTable.temp.keyframeByElement[element]
 
         local inheritedInterpAttribs = { }
 
@@ -482,12 +482,12 @@ local function analyzeElementSpecial(element, meta)
             animationByElement[child] = animation
         end
 
-        meta.temp.scopeByBone = table.merge(
-                meta.temp.scopeByBone or {},
+        lfaTable.temp.scopeByBone = table.merge(
+                lfaTable.temp.scopeByBone or {},
                 scopeByBone
         )
     elseif element.type == KEYFRAME_TYPE then
-        local animationByElement = meta.temp.animationByElement
+        local animationByElement = lfaTable.temp.animationByElement
         local animation = animationByElement[element]
 
         local time = element.attributes[ATTR_TIME]
@@ -515,14 +515,14 @@ local function analyzeElementSpecial(element, meta)
 
         table.insert(animation.keyframes, keyframeTable)
 
-        meta.temp.keyframeByElement = table.merge(
-                meta.temp.keyframeByElement or {},
+        lfaTable.temp.keyframeByElement = table.merge(
+                lfaTable.temp.keyframeByElement or {},
                 keyframeByElement
         )
     elseif element.type == ANIMATION_TYPE then
         local name = element.attributes[ATTR_NAME]
 
-        if meta.animations[name] then
+        if lfaTable.animations[name] then
             error("animation with name '" .. name .. "' already declared")
         end
 
@@ -588,17 +588,17 @@ local function analyzeElementSpecial(element, meta)
             animationByElement[keyframe] = animationTable
         end
 
-        meta.animations[name] = animationTable
+        lfaTable.animations[name] = animationTable
 
-        meta.temp.animationByElement = table.merge(
-                meta.temp.animationByElement or {},
+        lfaTable.temp.animationByElement = table.merge(
+                lfaTable.temp.animationByElement or {},
                 animationByElement
         )
     end
 
     if element.children and #element.children then
         for i = 1, #element.children do
-            analyzeElementSpecial(element.children[i], meta)
+            analyzeElementSpecial(element.children[i], lfaTable)
         end
     end
 end
@@ -661,45 +661,45 @@ local function analyzeElementGeneral(element)
     end
 end
 
-function M.analyze(lfaTable)
-    local meta = {
+function M.analyze(structureTable)
+    local lfaTable = {
         animations = { },
         interps = { },
         temp = { }
     }
 
-    local sortedLfaTable = { }
+    local sortedStructureTable = { }
 
-    for i = 1, #lfaTable do
-        local e = lfaTable[i]
+    for i = 1, #structureTable do
+        local e = structureTable[i]
 
         if e.type == INTERP_TYPE then
-            table.insert(sortedLfaTable, e)
+            table.insert(sortedStructureTable, e)
         end
     end
 
-    for i = 1, #lfaTable do
-        local e = lfaTable[i]
+    for i = 1, #structureTable do
+        local e = structureTable[i]
 
         if e.type == ANIMATION_TYPE then
-            table.insert(sortedLfaTable, e)
+            table.insert(sortedStructureTable, e)
         end
     end
 
-    for i = 1, #sortedLfaTable do
-        local element = sortedLfaTable[i]
+    for i = 1, #sortedStructureTable do
+        local element = sortedStructureTable[i]
 
         if not table.has(possibleElementsInRoot, element.type) then
             error("elements with type '" .. element.type .. "' can't be declared in the root")
         else
             analyzeElementGeneral(element)
-            analyzeElementSpecial(element, meta)
+            analyzeElementSpecial(element, lfaTable)
         end
     end
 
-    meta.temp = nil
+    lfaTable.temp = nil
 
-    return meta
+    return lfaTable
 end
 
 return M
