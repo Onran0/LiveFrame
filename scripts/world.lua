@@ -1,7 +1,11 @@
-local structure_parser = require "lfa/structure_parser"
+local parser = require "lfa/structure_parser"
+local analyzer = require "lfa/analyzer"
 
 function on_world_open()
+
     debug.print(
-            structure_parser.parse(file.read("liveframe:test.lfa"))
+            analyzer.analyze(
+                    parser.parse(file.read("liveframe:test.lfa"))
+            )
     )
 end
