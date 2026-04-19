@@ -67,9 +67,9 @@ output table format:
 }
 ]]--
 
-local quat_math = require "math/quat_math"
+local quat_math = require "util/math/quat_math"
 
-local util = require "util"
+local util = require "util/util"
 
 local structure_parser = require "lfa/structure_parser"
 local analyzer = require "lfa/analyzer"
