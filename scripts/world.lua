@@ -1,9 +1,3 @@
-local parse = require "lfa/structure_parser".parse
-local analyze = require "lfa/analyzer".analyze
-local load = require "lfa/loader".load
-
 function on_world_open()
-    debug.print(
-            load(file.read("liveframe:test.lfa"))
-    )
+    entities.spawn("liveframe:lftest", { 6.5, 70.5, 52.5 })
 end

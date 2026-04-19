@@ -1,0 +1,10 @@
+{
+  "body-type": "static",
+  "hitbox": [ 1, 1, 1 ],
+  "components": [
+    "liveframe:lftest"
+  ],
+  "skeleton-name": "Test",
+  "blocking": false,
+  "save": false
+}
