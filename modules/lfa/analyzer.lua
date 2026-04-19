@@ -2,7 +2,9 @@
 lfaTable - is a validated and fully correct table with animations and
 custom interpolations.
 
-all values are specified explicitly, with no defaults.
+all values are specified explicitly, with no defaults, except the interpolation.input,
+this field will not be assigned to default if value not specified explicitly.
+
 the @scope element is completely stripped, and any interpolation attributes
 are finalized to the interpolation table in each transformation.
 
@@ -35,7 +37,6 @@ output lfaTable structure:
                             position = {
                                 value = { 0, 0, 0 },
                                 interpolation = {
-                                    input = "lerp",
                                     output = "lerp"
                                 }
                             },
@@ -292,7 +293,14 @@ local allowedCustomizableInterpTypesFields = {
     }
 }
 
-local M = { }
+local M = {
+    allDefaultInterpTypes = interpTypes,
+
+    defaultTransformInterpTypes = defaultInterpTypes,
+    defaultRotationInterpTypes = defaultRotationInterpTypes,
+
+    allowedCustomizableInterpTypesFields = allowedCustomizableInterpTypesFields
+}
 
 local function validateAndGetValueType(value)
     local type = type(value)
@@ -433,7 +441,6 @@ local function analyzeElementSpecial(element, lfaTable)
             transformTable.interpolation.input = attrs[ATTR_IN_ROTATION_INTERP]
                     or attrs[ATTR_ROTATION_INTERP]
                     or tempBone.in_rotation_interp
-                    or INTERP_NLERP
 
             transformTable.interpolation.output = attrs[ATTR_OUT_ROTATION_INTERP]
                     or attrs[ATTR_ROTATION_INTERP]
@@ -441,7 +448,6 @@ local function analyzeElementSpecial(element, lfaTable)
                     or INTERP_NLERP
         else
             transformTable.interpolation.input = attrs[ATTR_IN_INTERP] or attrs[ATTR_INTERP] or tempBone.in_interp
-                                       or INTERP_LERP
 
             transformTable.interpolation.output = attrs[ATTR_OUT_INTERP] or attrs[ATTR_INTERP] or tempBone.out_interp
                                        or INTERP_LERP
