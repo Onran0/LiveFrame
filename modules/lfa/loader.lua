@@ -207,7 +207,7 @@ local function loadFromTable(lfaTable)
         if not interpFieldsIndices[type] then
             fieldsIndices = { }
 
-            for name, _ in pairs(analyzer.allowedCustomizableInterpTypesFields[type]) do
+            for name, _ in pairs(analyzer.requiredCustomizableInterpTypesFields[type]) do
                 table.insert(fieldsIndices, name)
             end
 

@@ -282,7 +282,7 @@ local allowedCustomizableInterpTypes = {
     INTERP_SQUAD
 }
 
-local allowedCustomizableInterpTypesFields = {
+local requiredCustomizableInterpTypesFields = {
     [INTERP_CUBIC_SPLINE] = {
         [CUBIC_SPLINE_IN_TANGENT] = VALUE_TYPE_VEC3,
         [CUBIC_SPLINE_OUT_TANGENT] = VALUE_TYPE_VEC3
@@ -299,7 +299,7 @@ local M = {
     defaultTransformInterpTypes = defaultInterpTypes,
     defaultRotationInterpTypes = defaultRotationInterpTypes,
 
-    allowedCustomizableInterpTypesFields = allowedCustomizableInterpTypesFields
+    requiredCustomizableInterpTypesFields = requiredCustomizableInterpTypesFields
 }
 
 local function validateAndGetValueType(value)
@@ -386,6 +386,8 @@ local function analyzeElementSpecial(element, lfaTable)
             fields = { }
         }
 
+        local requiredFields = requiredCustomizableInterpTypesFields[interpType]
+
         for i = 1, #element.children do
             local field = element.children[i]
 
@@ -395,12 +397,12 @@ local function analyzeElementSpecial(element, lfaTable)
                 error(errorPrefix .. "field with name '" .. name "' already declared")
             end
 
-            if not allowedCustomizableInterpTypesFields[interpType][name] then
+            if not requiredFields[name] then
                 error(errorPrefix .. "interpolation type '" .. interpType .. "' haven't field with name '" .. name .. "'")
             end
 
             local value = field.attributes[ATTR_VALUE]
-            local requiredValueType = allowedCustomizableInterpTypesFields[interpType][name]
+            local requiredValueType = requiredFields[name]
 
             if requiredValueType ~= validateAndGetValueType(value) then
                 error(
@@ -410,6 +412,12 @@ local function analyzeElementSpecial(element, lfaTable)
             end
 
             interpTable.fields[name] = value
+        end
+
+        for name, _ in pairs(requiredFields) do
+            if not interpTable.fields[name] then
+                error(errorPrefix .. "missing required field: '" .. name .. "'")
+            end
         end
 
         lfaTable.interps[id] = interpTable
