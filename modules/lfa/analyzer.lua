@@ -28,6 +28,7 @@ output lfaTable structure:
         ["main"] = {
             name = "main",
             eulerOrder = "xyz",
+            duration = 2, -- in seconds
             keyframes = {
                 {
                     time = 0,
@@ -660,6 +661,7 @@ local function analyzeElementSpecial(element, lfaTable)
         local animationByElement = { }
 
         local previousTime = -1
+        local maxTime = 0
 
         for i = 1, #element.children do
             local keyframe = element.children[i]
@@ -680,10 +682,14 @@ local function analyzeElementSpecial(element, lfaTable)
                 error(errorPrefix .. "first keyframe time must be 0")
             end
 
+            maxTime = math.max(maxTime, time)
+
             previousTime = time
 
             animationByElement[keyframe] = animationTable
         end
+
+        animationTable.duration = maxTime
 
         lfaTable.animations[name] = animationTable
 
