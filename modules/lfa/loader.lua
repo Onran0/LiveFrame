@@ -13,8 +13,8 @@ output table format:
     -- sets order for array in third field in transform keys
     interpFieldsIndices = {
         ["cubic-spline"] = {
-            "in-tangent" = 1,
-            "out-tangent" =  2
+            "in-tangent",
+            "out-tangent"
         }
     },
 
@@ -67,21 +67,122 @@ output table format:
 }
 ]]--
 
+local quat_math = require "math/quat_math"
+
 local util = require "util"
 
 local structure_parser = require "lfa/structure_parser"
 local analyzer = require "lfa/analyzer"
 
+local function getKeyValue(keys, index)
+    if keys[index] then return keys[index][1] end
+end
+
+local autoComputeInterpsTypes = {
+    ["cubic-spline"] = function(keys, index)
+        local p_prev = getKeyValue(keys, index - 1)
+        local p_curr = getKeyValue(keys, index)
+        local p_next = getKeyValue(keys, index + 1)
+
+        if not p_curr then
+            return { }
+        end
+
+        local t
+
+        if p_prev and p_next then
+            t = vec3.mul(vec3.sub(p_next, p_prev), 0.5)
+        elseif p_next then
+            t = vec3.sub(p_next, p_curr)
+        elseif p_prev then
+            t = vec3.sub(p_curr, p_prev)
+        else
+            t = { 0, 0, 0 }
+        end
+
+        return {
+            ["in-tangent"] = t,
+            ["out-tangent"] = t
+        }
+    end,
+
+    ["squad"] = function(keys, index)
+        local q_prev = getKeyValue(keys, index - 1)
+        local q_curr = getKeyValue(keys, index)
+        local q_next = getKeyValue(keys, index + 1)
+
+        if not q_curr then
+            return quat_math.idt(), quat_math.idt()
+        end
+
+        local function align(a, b)
+            if quat_math.dot(a, b) < 0 then
+                return -b
+            end
+            return b
+        end
+
+        local inControl
+        local outControl
+
+        if q_next then
+            local qn = align(q_curr, q_next)
+            local inv = quat_math.inverse(q_curr)
+
+            local log_next = quat_math.log(quat_math.mul(inv, qn))
+
+            local log_prev
+
+            if q_prev then
+                local qp = align(q_curr, q_prev)
+                log_prev = quat_math.log(quat_math.mul(inv, qp))
+            else
+                log_prev = quat_math.idt_log()
+            end
+
+            local avg = quat_math.scale(quat_math.add(log_next, log_prev), -0.25)
+            outControl = quat_math.mul(q_curr, quat_math.exp(avg))
+        else
+            outControl = q_curr
+        end
+
+        if q_prev then
+            local qp = align(q_curr, q_prev)
+            local inv = quat_math.inverse(q_curr)
+
+            local log_prev = quat_math.log(quat_math.mul(inv, qp))
+
+            local log_next
+            if q_next then
+                local qn = align(q_curr, q_next)
+                log_next = quat_math.log(quat_math.mul(inv, qn))
+            else
+                log_next = quat_math.idt_log()
+            end
+
+            local avg = quat_math.scale(quat_math.add(log_prev, log_next), -0.25)
+            inControl = quat_math.mul(q_curr, quat_math.exp(avg))
+        else
+            inControl = q_curr
+        end
+
+        return {
+            ["in-control"] = inControl,
+            ["out-control"] = outControl
+        }
+    end
+}
+
 local M = { }
 
 local function eulerToQuat(euler, order)
-    if order == 'xyz' then
+    if order == "xyz" then
         return quat.from_euler(euler)
     end
 
     local m = mat4.idt()
 
-    for i = 1, #order do
+    for i = #order, 1, -1 do
         local axis = { 0, 0, 0 }
 
         local ind = ("xyz"):find(order[i])
@@ -99,6 +200,58 @@ local function loadFromTable(lfaTable)
     local interpFieldsIndices = { }
 
     local animations = { }
+
+    local function createOrGetInterpFieldsIndices(type)
+        local fieldsIndices
+
+        if not interpFieldsIndices[type] then
+            fieldsIndices = { }
+
+            for name, _ in pairs(analyzer.allowedCustomizableInterpTypesFields[type]) do
+                table.insert(fieldsIndices, name)
+            end
+
+            interpFieldsIndices[type] = fieldsIndices
+        else
+            fieldsIndices = interpFieldsIndices[type]
+        end
+
+        return fieldsIndices
+    end
+
+    local function getInterpTypeAndFields(
+            rawType -- possibly a custom interp id, as well as a default interp type
+    )
+        if not table.has(analyzer.allDefaultInterpTypes, rawType) then
+            local customId = rawType
+            local type = lfaTable.interps[customId].type
+
+            local fieldsIndices = createOrGetInterpFieldsIndices(type)
+
+            local plainFields = { }
+            for name, value in pairs(lfaTable.interps[customId].fields) do
+                plainFields[table.index(fieldsIndices, name)] = value
+            end
+
+            return table.index(interpTypesIndices, type), plainFields
+        else
+            return table.index(interpTypesIndices, rawType)
+        end
+    end
+
+    local deferredAutoComputeInterpsFields = { }
+
+    local function tryAddToAutoComputeList(keys, type, fields)
+        type = interpTypesIndices[type]
+
+        if not fields and autoComputeInterpsTypes[type] then
+            table.insert(deferredAutoComputeInterpsFields, {
+                type = type,
+                keys = keys,
+                index = #keys
+            })
+        end
+    end
 
     for animationName, lfaAnimation in pairs(lfaTable.animations) do
         local boneIndices = { }
@@ -125,20 +278,35 @@ local function loadFromTable(lfaTable)
                         transform.interpolation.input,
                         transform.interpolation.output
                     }, function(interpType)
+                        if not table.has(analyzer.allDefaultInterpTypes, interpType) then
+                            interpType = lfaTable.interps[interpType].type
+                        end
+
                         table.insert_unique(interpTypesIndices, interpType)
                     end)
                 end
 
                 local function addToKeys(keys, transform, value)
+                    local type, fields
+
                     if transform.interpolation.input and #keys > 0 then
-                        keys[#keys][3] = table.index(interpTypesIndices, transform.interpolation.input)
+                        type, fields = getInterpTypeAndFields(transform.interpolation.input)
+
+                        keys[#keys][3] = type
+                        keys[#keys][4] = fields
+
+                        tryAddToAutoComputeList(keys, type, fields)
                     end
+
+                    type, fields = getInterpTypeAndFields(transform.interpolation.output)
 
                     table.insert(keys, {
                         value or transform.value,
                         time,
-                        table.index(interpTypesIndices, transform.interpolation.output)
+                        type, fields
                     })
+
+                    tryAddToAutoComputeList(keys, type, fields)
                 end
 
                 if bonePosition then
@@ -154,7 +322,7 @@ local function loadFromTable(lfaTable)
                     if #boneRotation.value == 3 then
                         quatRot = eulerToQuat(boneRotation.value, lfaAnimation.eulerOrder)
                     else
-                        quatRot = boneRotation.value
+                        quatRot = quat_math.from_xyzw(boneRotation.value)
                     end
 
                     addToKeys(rotationKeys, boneRotation, quatRot)
@@ -173,6 +341,20 @@ local function loadFromTable(lfaTable)
             bonesKeys = bonesKeys
         })
     end
+
+    util.foreach(deferredAutoComputeInterpsFields, function(deferredRequest)
+        local type = deferredRequest.type
+        local keys = deferredRequest.keys
+        local index = deferredRequest.index
+
+        local plainFields = { }
+
+        for name, value in pairs(autoComputeInterpsTypes[type](keys, index)) do
+            plainFields[table.index(createOrGetInterpFieldsIndices(type), name)] = value
+        end
+
+        keys[index][4] = plainFields
+    end)
 
     return
     {
