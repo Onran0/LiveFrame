@@ -337,28 +337,30 @@ local function analyzeElementSpecial(element, lfaTable)
        element.type == ROTATION_TYPE or
        element.type == SCALE_TYPE
     then
-        local function checkInterpAttributes(attributesList, defaultTypes, usingScope)
+        local function checkInterpAttributes(attributesList, defaultTypes, oppositeTypes, usingScope)
             for i = 1, #attributesList do
                 local interpAttr = element.attributes[attributesList[i]]
 
                 if interpAttr and not table.has(defaultTypes, interpAttr) then
-                    if not lfaTable.interps[interpAttr] then
+                    local msg = "interpolation '" .. interpAttr .. "' can't be used for " .. usingScope
+
+                    if table.has(oppositeTypes, interpAttr) then
+                        error(msg)
+                    elseif not lfaTable.interps[interpAttr] then
                         error("unknown interpolation '" .. interpAttr .. "'")
-                    else
-                        if not table.has(defaultTypes, lfaTable.interps[interpAttr].type) then
-                            error("custom interpolation '" .. interpAttr .. "' can't be used for " .. usingScope)
-                        end
+                    elseif not table.has(defaultTypes, lfaTable.interps[interpAttr].type) then
+                        error("custom " .. msg)
                     end
                 end
             end
         end
 
         if element.type ~= ROTATION_TYPE then
-            checkInterpAttributes(interpAttributes, defaultInterpTypes, 'position or scale')
+            checkInterpAttributes(interpAttributes, defaultInterpTypes, defaultRotationInterpTypes, 'position or scale')
         end
 
         if element.type ~= POSITION_TYPE and element.type ~= SCALE_TYPE then
-            checkInterpAttributes(rotationInterpAttributes, defaultRotationInterpTypes, 'rotation')
+            checkInterpAttributes(rotationInterpAttributes, defaultRotationInterpTypes, defaultInterpTypes, 'rotation')
         end
     end
     --- ---
