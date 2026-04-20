@@ -13,7 +13,24 @@ function M.dot(a, b)
 end
 
 function M.inverse(q)
-    return {q[1], -q[2], -q[3], -q[4]}
+    local len = M.length(q)
+
+    if len > 0 then
+        return {
+            q[1] / len,
+            -q[2] / len,
+            -q[3] / len,
+            -q[4] / len
+        }
+    else return q end
+end
+
+function M.conj(q)
+    return { q[1], -q[2], -q[3], -q[4] }
+end
+
+function M.negate(q)
+    return { -q[1], -q[2], -q[3], -q[4] }
 end
 
 function M.add(a, b)
@@ -25,7 +42,20 @@ function M.add(a, b)
     }
 end
 
+function M.sub(a, b)
+    return {
+        a[1] - b[1],
+        a[2] - b[2],
+        a[3] - b[3],
+        a[4] - b[4]
+    }
+end
+
 function M.mul(a, b)
+    if type(b) == 'number' then
+        return M.scale(a, b)
+    end
+
     local aw, ax, ay, az = a[1], a[2], a[3], a[4]
     local bw, bx, by, bz = b[1], b[2], b[3], b[4]
 
@@ -49,21 +79,15 @@ end
 function M.log(q)
     local w, x, y, z = q[1], q[2], q[3], q[4]
 
-    local v_len = math.sqrt(x*x + y*y + z*z)
+    local theta = math.acos(math.max(-1, math.min(1, w)))
+    local sinTheta = math.sin(theta)
 
-    if v_len < 1e-8 then
-        return {0, 0, 0, 0}
+    if math.abs(sinTheta) < 0.0001 then
+        return { 0, x, y, z }
     end
 
-    local angle = math.atan2(v_len, w)
-    local scale = angle / v_len
-
-    return {
-        0,
-        x * scale,
-        y * scale,
-        z * scale
-    }
+    local coeff = theta / sinTheta
+    return { 0, x * coeff, y * coeff, z * coeff }
 end
 
 function M.idt_log()
@@ -71,29 +95,36 @@ function M.idt_log()
 end
 
 function M.exp(q)
-    local x, y, z = q[1], q[2], q[3]
+    local x, y, z = q[2], q[3], q[4]
+    local theta = math.sqrt(x*x + y*y + z*z)
+    local sinTheta = math.sin(theta)
 
-    local angle = math.sqrt(x*x + y*y + z*z)
-
-    if angle < 1e-8 then
-        return {0, 0, 0, 1}
+    if theta < 0.0001 then
+        return M.idt()
     end
 
-    local sin_a = math.sin(angle)
-    local cos_a = math.cos(angle)
+    local coeff = sinTheta / theta
+    return { math.cos(theta), x * coeff, y * coeff, z * coeff }
+end
 
-    local scale = sin_a / angle
+function M.length_sqr(q)
+    return q[1]^2 + q[2]^2 + q[3]^2 + q[4]^2
+end
 
-    return {
-        cos_a,
-        x * scale,
-        y * scale,
-        z * scale
-    }
+function M.length(q)
+    return math.sqrt(M.length_sqr(q))
+end
+
+function M.img_length_sqr(q)
+    return q[2]^2 + q[3]^2 + q[4]^2
+end
+
+function M.img_length(q)
+    return math.sqrt(M.img_length_sqr(q))
 end
 
 function M.normalize(q)
-    local len = math.sqrt(M.dot(q, q))
+    local len = M.length(q)
 
     return {
         q[1]/len,

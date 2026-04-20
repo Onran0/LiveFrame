@@ -1,18 +1,64 @@
-@animation name "test" {
+@animation name "anim1" {
     @keyframe time 0 {
-        @scope rotation-interp "squad" out-interp "cubic-spline" {
-            @bone name "spine" {
-                @position value (0, 1, 2)
+        @scope rotation-interp "squad" {
+            @bone name "head" {
+                @rotation value (0, 0, 0)
+            }
+
+            @bone name "left_arm" {
+                @rotation value (0, 0, 0)
+            }
+
+            @bone name "right_arm" {
                 @rotation value (0, 0, 0)
             }
         }
     }
 
     @keyframe time 1 {
-        @scope rotation-interp "squad" out-interp "cubic-spline" {
-            @bone name "spine" {
-                @position value (2, 3, 5) out-interp "lerp"
-                @rotation value (45, 90, 45)
+        @scope rotation-interp "squad" {
+            @bone name "head" {
+                @rotation value (0, 0, 35)
+            }
+
+            @bone name "left_arm" {
+                @rotation value (60, 0, 0)
+            }
+
+            @bone name "right_arm" {
+                @rotation value (-60, 0, 0)
+            }
+        }
+    }
+
+    @keyframe time 3 {
+        @scope rotation-interp "squad" {
+            @bone name "head" {
+                @rotation value (0, 0, -35)
+            }
+
+            @bone name "left_arm" {
+                @rotation value (-60, 0, 0)
+            }
+
+            @bone name "right_arm" {
+                @rotation value (60, 0, 0)
+            }
+        }
+    }
+
+    @keyframe time 4 {
+        @scope rotation-interp "squad" {
+            @bone name "head" {
+                @rotation value (0, 0, 0)
+            }
+
+            @bone name "left_arm" {
+                @rotation value (0, 0, 0)
+            }
+
+            @bone name "right_arm" {
+                @rotation value (0, 0, 0)
             }
         }
     }

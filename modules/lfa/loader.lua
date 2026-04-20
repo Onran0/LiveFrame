@@ -75,101 +75,110 @@ local util = require "util/util"
 local structure_parser = require "lfa/structure_parser"
 local analyzer = require "lfa/analyzer"
 
-local function getKeyValue(keys, index)
-    if keys[index] then return keys[index][1] end
+local function getControlQuat(keys, index)
+    local k_curr = keys[index]
+
+    if not k_curr then return quat_math.idt() end
+
+    local k_prev = keys[index - 1]
+    local k_next = keys[index + 1]
+
+    local q_curr = k_curr and k_curr[1]
+    local q_prev = k_prev and k_prev[1]
+    local q_next = k_next and k_next[1]
+
+    if not q_prev then q_prev = q_curr end
+    if not q_next then q_next = q_curr end
+
+    local q_inv = quat_math.inverse(q_curr)
+
+    return quat_math.mul(
+            q_curr,
+            quat_math.exp(
+                    quat_math.scale(
+                            quat_math.add(
+                                    quat_math.log(
+                                            quat_math.mul(
+                                                    q_inv,
+                                                    q_prev
+                                            )
+                                    ),
+                                    quat_math.log(
+                                            quat_math.mul(
+                                                    q_inv,
+                                                    q_next
+                                            )
+                                    )
+                            ),
+                            -0.25
+                    )
+
+            )
+    )
 end
 
 local autoComputeInterpsTypes = {
     ["cubic-spline"] = function(keys, index)
-        local p_prev = getKeyValue(keys, index - 1)
-        local p_curr = getKeyValue(keys, index)
-        local p_next = getKeyValue(keys, index + 1)
+        local k_prev = keys[index - 1]
+        local k_curr = keys[index]
+        local k_next = keys[index + 1]
 
-        if not p_curr then
-            return { }
+        if not k_curr then
+            return { ["in-tangent"] = {0,0,0}, ["out-tangent"] = {0,0,0} }
         end
 
-        local t
+        local p_prev = k_prev and k_prev[1]
+        local p_curr = k_curr[1]
+        local p_next = k_next and k_next[1]
+
+        local t_prev = k_prev and k_prev[2]
+        local t_curr = k_curr[2]
+        local t_next = k_next and k_next[2]
+
+        local inTangent  = {0,0,0}
+        local outTangent = {0,0,0}
+
+        if p_prev then
+            local dt = t_curr - t_prev
+            if dt > 0 then
+                inTangent = vec3.div(vec3.sub(p_curr, p_prev), dt)
+            end
+        end
+
+        if p_next then
+            local dt = t_next - t_curr
+            if dt > 0 then
+                outTangent = vec3.div(vec3.sub(p_next, p_curr), dt)
+            end
+        end
 
         if p_prev and p_next then
-            t = vec3.mul(vec3.sub(p_next, p_prev), 0.5)
-        elseif p_next then
-            t = vec3.sub(p_next, p_curr)
-        elseif p_prev then
-            t = vec3.sub(p_curr, p_prev)
-        else
-            t = { 0, 0, 0 }
+            local dt = t_next - t_prev
+            if dt > 0 then
+                local tangent = vec3.div(vec3.sub(p_next, p_prev), dt)
+
+                local d1 = vec3.sub(p_curr, p_prev)
+                local d2 = vec3.sub(p_next, p_curr)
+
+                if vec3.dot(d1, d2) <= 0 then
+                    tangent = {0,0,0}
+                end
+
+                inTangent  = tangent
+                outTangent = tangent
+            end
         end
 
         return {
-            ["in-tangent"] = t,
-            ["out-tangent"] = t
+            ["in-tangent"] = inTangent,
+            ["out-tangent"] = outTangent
         }
     end,
 
     ["squad"] = function(keys, index)
-        local q_prev = getKeyValue(keys, index - 1)
-        local q_curr = getKeyValue(keys, index)
-        local q_next = getKeyValue(keys, index + 1)
-
-        if not q_curr then
-            return quat_math.idt(), quat_math.idt()
-        end
-
-        local function align(a, b)
-            if quat_math.dot(a, b) < 0 then
-                return -b
-            end
-            return b
-        end
-
-        local inControl
-        local outControl
-
-        if q_next then
-            local qn = align(q_curr, q_next)
-            local inv = quat_math.inverse(q_curr)
-
-            local log_next = quat_math.log(quat_math.mul(inv, qn))
-
-            local log_prev
-
-            if q_prev then
-                local qp = align(q_curr, q_prev)
-                log_prev = quat_math.log(quat_math.mul(inv, qp))
-            else
-                log_prev = quat_math.idt_log()
-            end
-
-            local avg = quat_math.scale(quat_math.add(log_next, log_prev), -0.25)
-            outControl = quat_math.mul(q_curr, quat_math.exp(avg))
-        else
-            outControl = q_curr
-        end
-
-        if q_prev then
-            local qp = align(q_curr, q_prev)
-            local inv = quat_math.inverse(q_curr)
-
-            local log_prev = quat_math.log(quat_math.mul(inv, qp))
-
-            local log_next
-            if q_next then
-                local qn = align(q_curr, q_next)
-                log_next = quat_math.log(quat_math.mul(inv, qn))
-            else
-                log_next = quat_math.idt_log()
-            end
-
-            local avg = quat_math.scale(quat_math.add(log_prev, log_next), -0.25)
-            inControl = quat_math.mul(q_curr, quat_math.exp(avg))
-        else
-            inControl = q_curr
-        end
-
         return {
-            ["in-control"] = inControl,
-            ["out-control"] = outControl
+            ["in-control"] = getControlQuat(keys, index),
+            ["out-control"] = getControlQuat(keys, index + 1)
         }
     end
 }
