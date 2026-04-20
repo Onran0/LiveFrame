@@ -100,6 +100,10 @@ local function parseAttributeValue(value)
 end
 
 function M.parse(text, offset, hasParent)
+    text = text
+            :replace("\r\n", "\n") -- CRLF to LF
+            :replace("\r", "\n") -- CR to LF
+
     local result = { }
 
     local parsingElement = false
