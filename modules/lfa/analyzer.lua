@@ -145,6 +145,7 @@ local SQUAD_OUT_CONTROL = "out-control"
 
 local types = {
     INTERP_TYPE,
+    INTERP_FIELD_TYPE,
     ANIMATION_TYPE,
     KEYFRAME_TYPE,
     SCOPE_TYPE,
@@ -184,6 +185,14 @@ local possibleAttributes = {
     [INTERP_TYPE] = {
         [ATTR_ID] = VALUE_TYPE_STRING,
         [ATTR_TYPE] = VALUE_TYPE_STRING
+    },
+    [INTERP_FIELD_TYPE] = {
+        [ATTR_NAME] = VALUE_TYPE_STRING,
+        [ATTR_VALUE] = {
+            VALUE_TYPE_QUAT, VALUE_TYPE_VEC3,
+            VALUE_TYPE_NUMBER, VALUE_TYPE_BOOLEAN,
+            VALUE_TYPE_STRING
+        }
     },
     [ANIMATION_TYPE] = {
         [ATTR_NAME] = VALUE_TYPE_STRING,
@@ -241,6 +250,7 @@ local possibleAttributes = {
 
 local requiredAttributes = {
     [INTERP_TYPE] = { ATTR_ID, ATTR_TYPE },
+    [INTERP_FIELD_TYPE] = { ATTR_NAME, ATTR_VALUE },
     [ANIMATION_TYPE] = { ATTR_NAME },
     [KEYFRAME_TYPE] = { ATTR_TIME },
     [SCOPE_TYPE] = { },
@@ -386,6 +396,7 @@ local function analyzeElementSpecial(element, lfaTable)
 
         local interpTable = {
             id = id,
+            type = interpType,
             fields = { }
         }
 
