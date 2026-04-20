@@ -111,6 +111,7 @@ local ATTR_TIME = "time"
 local ATTR_VALUE = "value"
 
 local ATTR_LOOP = "loop"
+local ATTR_DURATION = "duration"
 
 local ATTR_EULER_ORDER = "euler-order"
 
@@ -200,7 +201,8 @@ local possibleAttributes = {
     [ANIMATION_TYPE] = {
         [ATTR_NAME] = VALUE_TYPE_STRING,
         [ATTR_EULER_ORDER] = VALUE_TYPE_STRING,
-        [ATTR_LOOP] = VALUE_TYPE_BOOLEAN
+        [ATTR_LOOP] = VALUE_TYPE_BOOLEAN,
+        [ATTR_DURATION] = VALUE_TYPE_NUMBER
     },
     [KEYFRAME_TYPE] = {
         [ATTR_TIME] = VALUE_TYPE_NUMBER
@@ -715,7 +717,17 @@ local function analyzeElementSpecial(element, lfaTable)
             animationByElement[keyframe] = animationTable
         end
 
-        animationTable.duration = maxTime
+        local attrDuration = element.attributes[ATTR_DURATION]
+
+        if not attrDuration then
+            animationTable.duration = maxTime
+        else
+            if attrDuration < maxTime then
+                error(errorPrefix .. "last key time (" .. maxTime .. ") is higher than specified duration (" .. attrDuration .. ")")
+            end
+
+            animationTable.duration = attrDuration
+        end
 
         lfaTable.animations[name] = animationTable
 

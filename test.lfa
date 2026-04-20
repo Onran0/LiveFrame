@@ -1,5 +1,22 @@
-@animation name "anim1" loop true {
+@animation name "anim1" loop true duration 4 {
     @keyframe time 0 {
+        @scope rotation-interp "squad" {
+            @bone name "head" {
+                @position value (0, 0, 0)
+                @rotation value (0, 0, 0)
+            }
+
+            @bone name "left_arm" {
+                @rotation value (0, 0, 0)
+            }
+
+            @bone name "right_arm" {
+                @rotation value (0, 0, 0)
+            }
+        }
+    }
+
+    @keyframe time 1 {
         @scope rotation-interp "squad" {
             @bone name "head" {
                 @rotation value (0, 0, 35)
@@ -15,9 +32,10 @@
         }
     }
 
-    @keyframe time 2 {
+    @keyframe time 3 {
         @scope rotation-interp "squad" {
             @bone name "head" {
+                @position value (0, 5, 0)
                 @rotation value (0, 0, -35)
             }
 
