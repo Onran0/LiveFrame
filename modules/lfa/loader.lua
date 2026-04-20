@@ -22,6 +22,7 @@ output table format:
         -- animations in array stored as indices
         {
             name = "some_anim",
+            loop = true,
             duration = 2,
 
             -- indices for bones
@@ -347,6 +348,7 @@ local function loadFromTable(lfaTable)
 
         table.insert(animations, {
             name = animationName,
+            loop = lfaAnimation.loop,
             duration = lfaAnimation.duration,
             boneIndices = boneIndices,
             bonesKeys = bonesKeys

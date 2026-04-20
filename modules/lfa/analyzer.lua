@@ -28,6 +28,7 @@ output lfaTable structure:
         ["main"] = {
             name = "main",
             eulerOrder = "xyz",
+            loop = true,
             duration = 2, -- in seconds
             keyframes = {
                 {
@@ -108,6 +109,8 @@ local ATTR_OUT_ROTATION_INTERP = "out-rotation-interp"
 local ATTR_NAME = "name"
 local ATTR_TIME = "time"
 local ATTR_VALUE = "value"
+
+local ATTR_LOOP = "loop"
 
 local ATTR_EULER_ORDER = "euler-order"
 
@@ -196,7 +199,8 @@ local possibleAttributes = {
     },
     [ANIMATION_TYPE] = {
         [ATTR_NAME] = VALUE_TYPE_STRING,
-        [ATTR_EULER_ORDER] = VALUE_TYPE_STRING
+        [ATTR_EULER_ORDER] = VALUE_TYPE_STRING,
+        [ATTR_LOOP] = VALUE_TYPE_BOOLEAN
     },
     [KEYFRAME_TYPE] = {
         [ATTR_TIME] = VALUE_TYPE_NUMBER
@@ -661,9 +665,18 @@ local function analyzeElementSpecial(element, lfaTable)
             end
         end
 
+        local loop
+
+        if element.attributes[ATTR_LOOP] then
+            loop = true
+        else
+            loop = false
+        end
+
         local animationTable = {
             name = name,
             eulerOrder = eulerOrder or 'xyz',
+            loop = loop,
             keyframes = { }
         }
 
