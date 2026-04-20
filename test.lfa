@@ -2,7 +2,6 @@
     @keyframe time 0 {
         @scope rotation-interp "squad" {
             @bone name "head" {
-                @position value (0, 0, 0)
                 @rotation value (0, 0, 0)
             }
 
@@ -35,7 +34,6 @@
     @keyframe time 3 {
         @scope rotation-interp "squad" {
             @bone name "head" {
-                @position value (0, 5, 0)
                 @rotation value (0, 0, -35)
             }
 

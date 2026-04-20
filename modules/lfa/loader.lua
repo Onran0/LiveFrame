@@ -76,7 +76,7 @@ local util = require "util/util"
 local structure_parser = require "lfa/structure_parser"
 local analyzer = require "lfa/analyzer"
 
-local function getControlQuat(keys, index)
+local function getControlQuat(keys, index, loop)
     local k_curr = keys[index]
 
     if not k_curr then return quat_math.idt() end
@@ -84,12 +84,25 @@ local function getControlQuat(keys, index)
     local k_prev = keys[index - 1]
     local k_next = keys[index + 1]
 
-    local q_curr = k_curr and k_curr[1]
-    local q_prev = k_prev and k_prev[1]
-    local q_next = k_next and k_next[1]
+    if not k_prev then
+        if loop then
+            k_prev = keys[#keys]
+        else
+            k_prev = k_curr
+        end
+    end
 
-    if not q_prev then q_prev = q_curr end
-    if not q_next then q_next = q_curr end
+    if not k_next then
+        if loop then
+            k_next = keys[1]
+        else
+            k_next = k_curr
+        end
+    end
+
+    local q_curr = k_curr[1]
+    local q_prev = k_prev[1]
+    local q_next = k_next[1]
 
     local q_inv = quat_math.inverse(q_curr)
 
@@ -119,7 +132,7 @@ local function getControlQuat(keys, index)
 end
 
 local autoComputeInterpsTypes = {
-    ["cubic-spline"] = function(keys, index)
+    ["cubic-spline"] = function(keys, index, duration, loop)
         local k_prev = keys[index - 1]
         local k_curr = keys[index]
         local k_next = keys[index + 1]
@@ -128,13 +141,25 @@ local autoComputeInterpsTypes = {
             return { ["in-tangent"] = {0,0,0}, ["out-tangent"] = {0,0,0} }
         end
 
+        local t_curr = k_curr[2]
+        local t_prev, t_next
+
+        if not k_prev and loop then
+            k_prev = keys[#keys]
+            t_prev = t_curr - (duration - k_prev[2])
+        end
+
+        if not k_next and loop then
+            k_next = keys[1]
+            t_next = duration
+        end
+
         local p_prev = k_prev and k_prev[1]
         local p_curr = k_curr[1]
         local p_next = k_next and k_next[1]
 
-        local t_prev = k_prev and k_prev[2]
-        local t_curr = k_curr[2]
-        local t_next = k_next and k_next[2]
+        t_prev = t_prev or (k_prev and k_prev[2])
+        t_next = t_prev or (k_next and k_next[2])
 
         local inTangent  = {0,0,0}
         local outTangent = {0,0,0}
@@ -176,10 +201,10 @@ local autoComputeInterpsTypes = {
         }
     end,
 
-    ["squad"] = function(keys, index)
+    ["squad"] = function(keys, index, duration, loop)
         return {
-            ["in-control"] = getControlQuat(keys, index),
-            ["out-control"] = getControlQuat(keys, index + 1)
+            ["in-control"] = getControlQuat(keys, index, loop),
+            ["out-control"] = getControlQuat(keys, index + 1, loop)
         }
     end
 }
@@ -252,12 +277,14 @@ local function loadFromTable(lfaTable)
 
     local deferredAutoComputeInterpsFields = { }
 
-    local function tryAddToAutoComputeList(keys, type, fields)
+    local function tryAddToAutoComputeList(keys, type, loop, duration, fields)
         type = interpTypesIndices[type]
 
         if not fields and autoComputeInterpsTypes[type] then
             table.insert(deferredAutoComputeInterpsFields, {
                 type = type,
+                loop = loop,
+                duration = duration,
                 keys = keys,
                 index = #keys
             })
@@ -306,7 +333,7 @@ local function loadFromTable(lfaTable)
                         keys[#keys][3] = type
                         keys[#keys][4] = fields
 
-                        tryAddToAutoComputeList(keys, type, fields)
+                        tryAddToAutoComputeList(keys, type, lfaAnimation.loop, fields)
                     end
 
                     type, fields = getInterpTypeAndFields(transform.interpolation.output)
@@ -317,7 +344,7 @@ local function loadFromTable(lfaTable)
                         type, fields
                     })
 
-                    tryAddToAutoComputeList(keys, type, fields)
+                    tryAddToAutoComputeList(keys, type, lfaAnimation.loop, fields)
                 end
 
                 if bonePosition then
@@ -357,12 +384,14 @@ local function loadFromTable(lfaTable)
 
     util.foreach(deferredAutoComputeInterpsFields, function(deferredRequest)
         local type = deferredRequest.type
+        local loop = deferredRequest.loop
+        local duration = deferredRequest.duration
         local keys = deferredRequest.keys
         local index = deferredRequest.index
 
         local plainFields = { }
 
-        for name, value in pairs(autoComputeInterpsTypes[type](keys, index)) do
+        for name, value in pairs(autoComputeInterpsTypes[type](keys, index, duration, loop)) do
             plainFields[table.index(createOrGetInterpFieldsIndices(type), name)] = value
         end
 
