@@ -1,10 +1,7 @@
 local quat_math = require "util/math/quat_math"
+local math_util = require "math/math_util"
 
 local M = { }
-
-local function lerp(a, b, t)
-    return a + (b - a) * t
-end
 
 local function squadSlerp(q1, q2, t)
     local dot = math.clamp(quat_math.dot(q1, q2), -1, 1)
@@ -27,9 +24,9 @@ end
 M.functions = {
     lerp = function(a, b, t)
         return {
-            lerp(a[1], b[1], t),
-            lerp(a[2], b[2], t),
-            lerp(a[3], b[3], t)
+            math_util.lerp(a[1], b[1], t),
+            math_util.lerp(a[2], b[2], t),
+            math_util.lerp(a[3], b[3], t)
         }
     end,
     ["cubic-spline"] = function(a, b, t, inTangent, outTangent)
@@ -57,10 +54,10 @@ M.functions = {
 
     nlerp = function(a, b, t)
         return quat_math.normalize({
-            lerp(a[1], b[1], t),
-            lerp(a[2], b[2], t),
-            lerp(a[3], b[3], t),
-            lerp(a[4], b[4], t)
+            math_util.lerp(a[1], b[1], t),
+            math_util.lerp(a[2], b[2], t),
+            math_util.lerp(a[3], b[3], t),
+            math_util.lerp(a[4], b[4], t)
         })
     end,
 
