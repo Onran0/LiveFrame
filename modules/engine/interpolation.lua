@@ -1,5 +1,5 @@
 local quat_math = require "util/math/quat_math"
-local math_util = require "math/math_util"
+local math_util = require "util/math/math_util"
 
 local M = { }
 
