@@ -5,9 +5,9 @@ local M = { }
 
 M.__index = M
 
-function M:new(animationsMetadata, skeleton)
+function M:new(clipsMetadata, skeleton)
     local obj = {
-        animationsMetadata = animationsMetadata,
+        clipsMetadata = clipsMetadata,
         skeleton = skeleton,
         time = 0,
         speed = 1,
@@ -19,7 +19,7 @@ function M:new(animationsMetadata, skeleton)
 
     local fromLocalInterpFieldsIndexToGlobal = { }
 
-    for interpType, interpFields in pairs(animationsMetadata.interpFieldsIndices) do
+    for interpType, interpFields in pairs(clipsMetadata.interpFieldsIndices) do
         local t = { }
 
         for i, interpField in ipairs(interpFields) do
@@ -27,13 +27,13 @@ function M:new(animationsMetadata, skeleton)
         end
 
         fromLocalInterpFieldsIndexToGlobal[
-            table.index(animationsMetadata.interpTypesIndices, interpType)
+            table.index(clipsMetadata.interpTypesIndices, interpType)
         ] = t
     end
 
     local interpIndexToFunc = { }
 
-    util.foreach(animationsMetadata.interpTypesIndices, function(interpType, interpIndex)
+    util.foreach(clipsMetadata.interpTypesIndices, function(interpType, interpIndex)
         interpIndexToFunc[interpIndex] = interpolation.functions[interpType]
     end)
 
@@ -44,20 +44,20 @@ function M:new(animationsMetadata, skeleton)
 end
 
 function M:__update_rig_indices()
-    if not self.playingAnimation then
-        self.animBoneIndexToRigIndex = nil
+    if not self.playingClip then
+        self.clipBoneIndexToRigIndex = nil
         return
     end
 
-    local animation = self.animationsMetadata.animations[self.playingAnimation]
+    local clip = self.clipsMetadata.clips[self.playingClip]
 
-    local animBoneIndexToRigIndex = { }
+    local clipBoneIndexToRigIndex = { }
 
-    util.foreach(animation.boneIndices, function(boneName, boneIndex)
-        animBoneIndexToRigIndex[boneIndex] = self.skeleton:index(boneName)
+    util.foreach(clip.bonesIndices, function(boneName, boneIndex)
+        clipBoneIndexToRigIndex[boneIndex] = self.skeleton:index(boneName)
     end)
 
-    self.animBoneIndexToRigIndex = animBoneIndexToRigIndex
+    self.clipBoneIndexToRigIndex = clipBoneIndexToRigIndex
 end
 
 function M:set_skeleton(skeleton)
@@ -69,42 +69,42 @@ end
 function M:play(name)
     local index
 
-    util.foreach(self.animationsMetadata.animations, function(anim, i)
-        if anim.name == name then
+    util.foreach(self.clipsMetadata.clips, function(clip, i)
+        if clip.name == name then
             index = i
             return true
         end
     end)
 
-    if not index then error("undefined animation: '" .. name .. "'") end
+    if not index then error("undefined clip '" .. name .. "'") end
 
     self:play_by_index(index)
 end
 
 function M:play_by_index(index)
-    local animation = self.animationsMetadata.animations[index]
+    local clip = self.clipsMetadata.clips[index]
 
-    self.duration = animation.duration
-    self.looped = animation.loop
+    self.duration = clip.duration
+    self.looped = clip.loop
     self.paused = false
     self.time = 0
 
-    self.playingAnimation = index
+    self.playingClip = index
 
     self:__update_rig_indices()
 end
 
-function M:get_playing_animation()
-    if self.playingAnimation then
-        return self.animationsMetadata.animations[self.playingAnimation].name
+function M:get_playing_clip()
+    if self.playingClip then
+        return self.clipsMetadata.clips[self.playingClip].name
     end
 end
 
-function M:get_playing_animation_index()
-    return self.playingAnimation
+function M:get_playing_clip_index()
+    return self.playingClip
 end
 
-function M:get_animation_duration()
+function M:get_clip_duration()
     return self.duration
 end
 
@@ -113,13 +113,13 @@ function M:is_paused()
 end
 
 function M:stop()
-    self.animBoneIndexToRigIndex = nil
+    self.clipBoneIndexToRigIndex = nil
 
     self.paused = false
     self.time = 0
     self.duration = nil
 
-    self.playingAnimation = nil
+    self.playingClip = nil
 end
 
 function M:pause()
@@ -164,14 +164,14 @@ function M:__map_interp_fields(interpTypeIndex, keyFields)
     return unpack(resultFields)
 end
 
-function M:get_bone_transform_sample(boneIndex, currentTime, animation, returnTable)
-    if not animation then
-        animation = self.animationsMetadata.animations[self.playingAnimation]
+function M:get_bone_transform_sample(boneIndex, currentTime, clip, returnTable)
+    if not clip then
+        clip = self.clipsMetadata.clips[self.playingClip]
     end
 
     -- converting bone name to bone index
     if type(boneIndex) == "string" then
-        boneIndex = table.index(animation.bonesKeys, boneIndex)
+        boneIndex = table.index(clip.bonesKeys, boneIndex)
     end
 
     if not currentTime then
@@ -182,7 +182,7 @@ function M:get_bone_transform_sample(boneIndex, currentTime, animation, returnTa
 
     local transform = { } -- 1 - translate (vec3), 2 - rotation (quat), 3 - scale (vec3)
 
-    local boneKeys = animation.bonesKeys[boneIndex]
+    local boneKeys = clip.bonesKeys[boneIndex]
 
     for i = 1, 3 do
         local transformKeys = boneKeys[i]
@@ -247,9 +247,9 @@ function M:get_bone_transform_sample(boneIndex, currentTime, animation, returnTa
     end
 end
 
-function M:get_transforms_sample(currentTime, animation, useIndicesInsteadNames)
-    if not animation then
-        animation = self.animationsMetadata.animations[self.playingAnimation]
+function M:get_transforms_sample(currentTime, clip, useIndicesInsteadNames)
+    if not clip then
+        clip = self.clipsMetadata.clips[self.playingClip]
     end
 
     if not currentTime then
@@ -258,17 +258,17 @@ function M:get_transforms_sample(currentTime, animation, useIndicesInsteadNames)
 
     local transforms = { }
 
-    util.foreach(animation.bonesKeys, function(name, index)
+    util.foreach(clip.bonesKeys, function(_, index)
         transforms[
-            useIndicesInsteadNames and index or name
-        ] = self:get_bone_transform_sample(index, currentTime, animation)
+            useIndicesInsteadNames and index or clip.bonesIndices[index]
+        ] = self:get_bone_transform_sample(index, currentTime, clip, true)
     end)
 
     return transforms
 end
 
 function M:step(delta)
-    if not self.playingAnimation or self.paused then
+    if not self.playingClip or self.paused then
         return
     elseif not self.looped and (self.time >= self.duration or (self.time < 0 and delta < 0)) then
         return
@@ -276,7 +276,7 @@ function M:step(delta)
         return
     end
 
-    local animation = self.animationsMetadata.animations[self.playingAnimation]
+    local clip = self.clipsMetadata.clips[self.playingClip]
 
     local currentTime = self.time + delta * self.speed
 
@@ -285,26 +285,27 @@ function M:step(delta)
     end
 
     util.foreach(
-            self:get_transforms_sample(currentTime, animation, true),
-            function(index, transform)
-        local boneMatrix
+            self:get_transforms_sample(currentTime, clip, true),
+            function(transform, index)
+                local boneMatrix
 
-        if transform[1] then
-            boneMatrix = mat4.translate(transform[1])
-        else
-            boneMatrix = mat4.idt()
-        end
+                if transform[1] then
+                    boneMatrix = mat4.translate(transform[1])
+                else
+                    boneMatrix = mat4.idt()
+                end
 
-        if transform[2] then
-            boneMatrix = mat4.mul(boneMatrix, mat4.from_quat(transform[2]))
-        end
+                if transform[2] then
+                    boneMatrix = mat4.mul(boneMatrix, mat4.from_quat(transform[2]))
+                end
 
-        if transform[3] then
-            boneMatrix = mat4.mul(boneMatrix, mat4.scale(transform[3]))
-        end
+                if transform[3] then
+                    boneMatrix = mat4.mul(boneMatrix, mat4.scale(transform[3]))
+                end
 
-        self.skeleton:set_matrix(self.animBoneIndexToRigIndex[index], boneMatrix)
-    end)
+                self.skeleton:set_matrix(self.clipBoneIndexToRigIndex[index], boneMatrix)
+            end
+    )
 
     self.time = currentTime
 end

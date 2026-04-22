@@ -18,15 +18,14 @@ output table format:
         }
     },
 
-    animations = {
-        -- animations in array stored as indices
+    clips = {
         {
-            name = "some_anim",
+            name = "some_clip",
             loop = true,
             duration = 2,
 
             -- indices for bones
-            boneIndices = {
+            bonesIndices = {
                 "spine",
                 "head"
             },
@@ -235,7 +234,7 @@ local function loadFromTable(lfaTable)
     local interpTypesIndices = { }
     local interpFieldsIndices = { }
 
-    local animations = { }
+    local clips = { }
 
     local function createOrGetInterpFieldsIndices(type)
         local fieldsIndices
@@ -291,16 +290,16 @@ local function loadFromTable(lfaTable)
         end
     end
 
-    for animationName, lfaAnimation in pairs(lfaTable.animations) do
-        local boneIndices = { }
+    for clipName, lfaClip in pairs(lfaTable.clips) do
+        local bonesIndices = { }
         local bonesKeys = { }
 
-        util.foreach(lfaAnimation.keyframes, function(keyframe)
+        util.foreach(lfaClip.keyframes, function(keyframe)
             local time = keyframe.time
 
             util.foreach(keyframe.bones, function(bone)
-                table.insert_unique(boneIndices, bone.name)
-                local idxInBonesKeys = table.index(boneIndices, bone.name)
+                table.insert_unique(bonesIndices, bone.name)
+                local idxInBonesKeys = table.index(bonesIndices, bone.name)
                 local boneKeys = bonesKeys[idxInBonesKeys]
 
                 if not boneKeys then
@@ -333,7 +332,7 @@ local function loadFromTable(lfaTable)
                         keys[#keys][3] = type
                         keys[#keys][4] = fields
 
-                        tryAddToAutoComputeList(keys, type, lfaAnimation.loop, fields)
+                        tryAddToAutoComputeList(keys, type, lfaClip.loop, fields)
                     end
 
                     type, fields = getInterpTypeAndFields(transform.interpolation.output)
@@ -344,7 +343,7 @@ local function loadFromTable(lfaTable)
                         type, fields
                     })
 
-                    tryAddToAutoComputeList(keys, type, lfaAnimation.loop, fields)
+                    tryAddToAutoComputeList(keys, type, lfaClip.loop, fields)
                 end
 
                 if bonePosition then
@@ -358,7 +357,7 @@ local function loadFromTable(lfaTable)
                     local quatRot
 
                     if #boneRotation.value == 3 then
-                        quatRot = eulerToQuat(boneRotation.value, lfaAnimation.eulerOrder)
+                        quatRot = eulerToQuat(boneRotation.value, lfaClip.eulerOrder)
                     else
                         quatRot = quat_math.from_xyzw(boneRotation.value)
                     end
@@ -373,11 +372,11 @@ local function loadFromTable(lfaTable)
             end)
         end)
 
-        table.insert(animations, {
-            name = animationName,
-            loop = lfaAnimation.loop,
-            duration = lfaAnimation.duration,
-            boneIndices = boneIndices,
+        table.insert(clips, {
+            name = clipName,
+            loop = lfaClip.loop,
+            duration = lfaClip.duration,
+            bonesIndices = bonesIndices,
             bonesKeys = bonesKeys
         })
     end
@@ -402,7 +401,7 @@ local function loadFromTable(lfaTable)
     {
         interpTypesIndices = interpTypesIndices,
         interpFieldsIndices = interpFieldsIndices,
-        animations = animations
+        clips = clips
     }
 end
 
@@ -410,7 +409,7 @@ function M.load(value)
     local t = type(value)
 
     if t == 'table' then
-        if value.animations and value.interps then -- check for pure LFA table
+        if value.clips and value.interps then -- check for pure LFA table
             return loadFromTable(value)
         else -- passing analyzed structure
             return loadFromTable(analyzer.analyze(value))

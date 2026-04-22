@@ -1,5 +1,5 @@
 --[[
-lfaTable - is a validated and fully correct table with animations and
+lfaTable - is a validated and fully correct table with clips and
 custom interpolations.
 
 all values are specified explicitly, with no defaults, except the interpolation.input,
@@ -24,7 +24,7 @@ output lfaTable structure:
         }
     },
 
-    animations = {
+    clips = {
         ["main"] = {
             name = "main",
             eulerOrder = "xyz",
@@ -84,7 +84,7 @@ output lfaTable structure:
 
 local INTERP_TYPE = "interp"
 local INTERP_FIELD_TYPE = "field"
-local ANIMATION_TYPE = "animation"
+local CLIP_TYPE = "clip"
 
 local KEYFRAME_TYPE = "keyframe"
 
@@ -150,7 +150,7 @@ local SQUAD_OUT_CONTROL = "out-control"
 local types = {
     INTERP_TYPE,
     INTERP_FIELD_TYPE,
-    ANIMATION_TYPE,
+    CLIP_TYPE,
     KEYFRAME_TYPE,
     SCOPE_TYPE,
     BONE_TYPE,
@@ -175,11 +175,11 @@ local interpTypes = {
 
 --
 
-local possibleElementsInRoot = { ANIMATION_TYPE, INTERP_TYPE }
+local possibleElementsInRoot = { CLIP_TYPE, INTERP_TYPE }
 
 local possibleChildrenTypes = {
     [INTERP_TYPE] = { INTERP_FIELD_TYPE },
-    [ANIMATION_TYPE] = { KEYFRAME_TYPE },
+    [CLIP_TYPE] = { KEYFRAME_TYPE },
     [KEYFRAME_TYPE] = { SCOPE_TYPE, BONE_TYPE, TRIGGER_TYPE },
     [SCOPE_TYPE] = { SCOPE_TYPE, BONE_TYPE },
     [BONE_TYPE] = { POSITION_TYPE, ROTATION_TYPE, SCALE_TYPE },
@@ -198,7 +198,7 @@ local possibleAttributes = {
             VALUE_TYPE_STRING
         }
     },
-    [ANIMATION_TYPE] = {
+    [CLIP_TYPE] = {
         [ATTR_NAME] = VALUE_TYPE_STRING,
         [ATTR_EULER_ORDER] = VALUE_TYPE_STRING,
         [ATTR_LOOP] = VALUE_TYPE_BOOLEAN,
@@ -257,7 +257,7 @@ local possibleAttributes = {
 local requiredAttributes = {
     [INTERP_TYPE] = { ATTR_ID, ATTR_TYPE },
     [INTERP_FIELD_TYPE] = { ATTR_NAME, ATTR_VALUE },
-    [ANIMATION_TYPE] = { ATTR_NAME },
+    [CLIP_TYPE] = { ATTR_NAME },
     [KEYFRAME_TYPE] = { ATTR_TIME },
     [SCOPE_TYPE] = { },
     [BONE_TYPE] = { ATTR_NAME },
@@ -446,12 +446,12 @@ local function analyzeElementSpecial(element, lfaTable)
         element.type == ROTATION_TYPE or
         element.type == SCALE_TYPE
     then
-        local animation = lfaTable.temp.animationByElement[element]
+        local clip = lfaTable.temp.clipByElement[element]
         local keyframe = lfaTable.temp.keyframeByElement[element]
         local tempBone = lfaTable.temp.boneByTransform[element]
         local bone = keyframe.bones[tempBone.name]
 
-        local errorPrefix = "(animation: " .. animation.name ..
+        local errorPrefix = "(clip: " .. clip.name ..
                 ", keyframe time: " .. keyframe.time .. ", bone name: " .. bone.name .. ") "
 
         if element.children then
@@ -483,15 +483,15 @@ local function analyzeElementSpecial(element, lfaTable)
 
         bone[element.type] = transformTable
     elseif element.type == BONE_TYPE then
-        local animationByElement = lfaTable.temp.animationByElement
+        local clipByElement = lfaTable.temp.clipByElement
         local keyframeByElement = lfaTable.temp.keyframeByElement
 
-        local animation = lfaTable.temp.animationByElement[element]
+        local clip = lfaTable.temp.clipByElement[element]
         local keyframe = lfaTable.temp.keyframeByElement[element]
 
         local name = element.attributes[ATTR_NAME]
 
-        local errorPrefix = "(animation: " .. animation.name ..
+        local errorPrefix = "(clip: " .. clip.name ..
                 ", keyframe time: " .. keyframe.time .. ", bone name: " .. name .. ") "
 
         if keyframe.bones[name] then
@@ -534,7 +534,7 @@ local function analyzeElementSpecial(element, lfaTable)
 
             boneByTransform[child] = boneTempTable
             keyframeByElement[child] = keyframe
-            animationByElement[child] = animation
+            clipByElement[child] = clip
         end
 
         if table.count_pairs(hasTransform) == 0 then
@@ -546,10 +546,10 @@ local function analyzeElementSpecial(element, lfaTable)
                 boneByTransform
         )
     elseif element.type == SCOPE_TYPE then
-        local animationByElement = lfaTable.temp.animationByElement
+        local clipByElement = lfaTable.temp.clipByElement
         local keyframeByElement = lfaTable.temp.keyframeByElement
 
-        local animation = lfaTable.temp.animationByElement[element]
+        local clip = lfaTable.temp.clipByElement[element]
         local keyframe = lfaTable.temp.keyframeByElement[element]
 
         local inheritedInterpAttribs = { }
@@ -592,7 +592,7 @@ local function analyzeElementSpecial(element, lfaTable)
             end
 
             keyframeByElement[child] = keyframe
-            animationByElement[child] = animation
+            clipByElement[child] = clip
         end
 
         lfaTable.temp.scopeByBone = table.merge(
@@ -600,12 +600,12 @@ local function analyzeElementSpecial(element, lfaTable)
                 scopeByBone
         )
     elseif element.type == KEYFRAME_TYPE then
-        local animationByElement = lfaTable.temp.animationByElement
-        local animation = animationByElement[element]
+        local clipByElement = lfaTable.temp.clipByElement
+        local clip = clipByElement[element]
 
         local time = element.attributes[ATTR_TIME]
 
-        local errorPrefix = "(animation: " .. animation.name ..
+        local errorPrefix = "(clip: " .. clip.name ..
                 ", keyframe time: " .. time .. ") "
 
         if not element.children or #element.children == 0 then
@@ -623,23 +623,23 @@ local function analyzeElementSpecial(element, lfaTable)
             local child = element.children[i]
 
             keyframeByElement[child] = keyframeTable
-            animationByElement[child] = animation
+            clipByElement[child] = clip
         end
 
-        table.insert(animation.keyframes, keyframeTable)
+        table.insert(clip.keyframes, keyframeTable)
 
         lfaTable.temp.keyframeByElement = table.merge(
                 lfaTable.temp.keyframeByElement or {},
                 keyframeByElement
         )
-    elseif element.type == ANIMATION_TYPE then
+    elseif element.type == CLIP_TYPE then
         local name = element.attributes[ATTR_NAME]
 
-        if lfaTable.animations[name] then
-            error("animation with name '" .. name .. "' already declared")
+        if lfaTable.clips[name] then
+            error("clip with name '" .. name .. "' already declared")
         end
 
-        local errorPrefix = "(animation: " .. name .. ") "
+        local errorPrefix = "(clip: " .. name .. ") "
 
         local eulerOrder = element.attributes[ATTR_EULER_ORDER]
 
@@ -675,7 +675,7 @@ local function analyzeElementSpecial(element, lfaTable)
             loop = false
         end
 
-        local animationTable = {
+        local clipTable = {
             name = name,
             eulerOrder = eulerOrder or 'xyz',
             loop = loop,
@@ -683,10 +683,10 @@ local function analyzeElementSpecial(element, lfaTable)
         }
 
         if not element.children or #element.children == 0 then
-            error(errorPrefix .. "animation can't be without children")
+            error(errorPrefix .. "clip can't be without children")
         end
 
-        local animationByElement = { }
+        local clipByElement = { }
 
         local previousTime = -1
         local maxTime = 0
@@ -701,7 +701,7 @@ local function analyzeElementSpecial(element, lfaTable)
             end
 
             if previousTime > time then
-                error(errorPrefix .. "invalid keyframes order in animation. please sort keyframes by ascending time")
+                error(errorPrefix .. "invalid keyframes order in clip. please sort keyframes by ascending time")
             elseif previousTime == time then
                 error(errorPrefix .. "keyframe with time " .. time .. " already declared")
             end
@@ -714,26 +714,26 @@ local function analyzeElementSpecial(element, lfaTable)
 
             previousTime = time
 
-            animationByElement[keyframe] = animationTable
+            clipByElement[keyframe] = clipTable
         end
 
         local attrDuration = element.attributes[ATTR_DURATION]
 
         if not attrDuration then
-            animationTable.duration = maxTime
+            clipTable.duration = maxTime
         else
             if attrDuration < maxTime then
                 error(errorPrefix .. "last key time (" .. maxTime .. ") is higher than specified duration (" .. attrDuration .. ")")
             end
 
-            animationTable.duration = attrDuration
+            clipTable.duration = attrDuration
         end
 
-        lfaTable.animations[name] = animationTable
+        lfaTable.clips[name] = clipTable
 
-        lfaTable.temp.animationByElement = table.merge(
-                lfaTable.temp.animationByElement or {},
-                animationByElement
+        lfaTable.temp.clipByElement = table.merge(
+                lfaTable.temp.clipByElement or {},
+                clipByElement
         )
     end
 
@@ -804,7 +804,7 @@ end
 
 function M.analyze(structureTable)
     local lfaTable = {
-        animations = { },
+        clips = { },
         interps = { },
         temp = { }
     }
@@ -822,7 +822,7 @@ function M.analyze(structureTable)
     for i = 1, #structureTable do
         local e = structureTable[i]
 
-        if e.type == ANIMATION_TYPE then
+        if e.type == CLIP_TYPE then
             table.insert(sortedStructureTable, e)
         end
     end
