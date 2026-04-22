@@ -164,10 +164,23 @@ function M:__map_interp_fields(interpTypeIndex, keyFields)
     return unpack(resultFields)
 end
 
-function M:__step_bone(animation, boneIndex, currentTime)
+function M:get_bone_transform_sample(boneIndex, currentTime, animation, returnTable)
+    if not animation then
+        animation = self.animationsMetadata.animations[self.playingAnimation]
+    end
+
+    -- converting bone name to bone index
+    if type(boneIndex) == "string" then
+        boneIndex = table.index(animation.bonesKeys, boneIndex)
+    end
+
+    if not currentTime then
+        currentTime = self.time
+    end
+
     local looped = self.looped
 
-    local transforms = { } -- 1 - translate (vec3), 2 - rotation (quat), 3 - scale (vec3)
+    local transform = { } -- 1 - translate (vec3), 2 - rotation (quat), 3 - scale (vec3)
 
     local boneKeys = animation.bonesKeys[boneIndex]
 
@@ -188,9 +201,9 @@ function M:__step_bone(animation, boneIndex, currentTime)
             end)
 
             if not keyTo and not looped then
-                transforms[i] = transformKeys[#transformKeys][1]
+                transform[i] = transformKeys[#transformKeys][1]
             elseif not keyFrom and not looped then
-                transforms[i] = keyTo[1]
+                transform[i] = keyTo[1]
             else
                 local keyToTime
 
@@ -222,28 +235,36 @@ function M:__step_bone(animation, boneIndex, currentTime)
                     value = interpFunc(keyFrom[1], keyTo[1], factor)
                 end
 
-                transforms[i] = value
+                transform[i] = value
             end
         end
     end
 
-    local boneMatrix
-
-    if transforms[1] then
-        boneMatrix = mat4.translate(transforms[1])
+    if not returnTable then
+        return transform[1], transform[2], transform[3]
     else
-        boneMatrix = mat4.idt()
+        return transform
+    end
+end
+
+function M:get_transforms_sample(currentTime, animation, useIndicesInsteadNames)
+    if not animation then
+        animation = self.animationsMetadata.animations[self.playingAnimation]
     end
 
-    if transforms[2] then
-        boneMatrix = mat4.mul(boneMatrix, mat4.from_quat(transforms[2]))
+    if not currentTime then
+        currentTime = self.time
     end
 
-    if transforms[3] then
-        boneMatrix = mat4.mul(boneMatrix, mat4.scale(transforms[3]))
-    end
+    local transforms = { }
 
-    self.skeleton:set_matrix(self.animBoneIndexToRigIndex[boneIndex], boneMatrix)
+    util.foreach(animation.bonesKeys, function(name, index)
+        transforms[
+            useIndicesInsteadNames and index or name
+        ] = self:get_bone_transform_sample(index, currentTime, animation)
+    end)
+
+    return transforms
 end
 
 function M:step(delta)
@@ -263,8 +284,26 @@ function M:step(delta)
         currentTime = currentTime % self.duration
     end
 
-    util.foreach(animation.bonesKeys, function(_, index)
-        self:__step_bone(animation, index, currentTime)
+    util.foreach(
+            self:get_transforms_sample(currentTime, animation, true),
+            function(index, transform)
+        local boneMatrix
+
+        if transform[1] then
+            boneMatrix = mat4.translate(transform[1])
+        else
+            boneMatrix = mat4.idt()
+        end
+
+        if transform[2] then
+            boneMatrix = mat4.mul(boneMatrix, mat4.from_quat(transform[2]))
+        end
+
+        if transform[3] then
+            boneMatrix = mat4.mul(boneMatrix, mat4.scale(transform[3]))
+        end
+
+        self.skeleton:set_matrix(self.animBoneIndexToRigIndex[index], boneMatrix)
     end)
 
     self.time = currentTime
