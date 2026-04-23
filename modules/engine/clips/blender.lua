@@ -6,12 +6,21 @@ local M = { }
 
 M.__index = M
 
-function M:new(player)
+function M:new(sampler)
     return setmetatable({
-        player = player,
+        sampler = sampler,
         blendingClipsNames = { },
         blendingClipsIndices = { }
     }, self)
+end
+
+function M:get_sampler()
+    return self.sampler
+end
+
+function M:set_sampler(sampler)
+    self.sampler = sampler
+    self:set_blending_clips(self.blendingClipsNames)
 end
 
 function M:get_blending_clips()
@@ -24,7 +33,7 @@ function M:set_blending_clips(blendingClipsNames)
     local blendingClipsIndices = { }
 
     util.foreach(blendingClipsNames, function(clipName, index)
-        blendingClipsIndices[index] = self.player:get_clip_index_by_name(clipName)
+        blendingClipsIndices[index] = self.sampler:get_clip_index_by_name(clipName)
     end)
 
     self.blendingClipsIndices = blendingClipsIndices
@@ -36,11 +45,7 @@ function M:blend_transforms_samples(times, factors)
     local clipsTransforms = { }
 
     for i = 1, #blendingClipsIndices do
-        self.player:play_by_index(blendingClipsIndices[i])
-
-        clipsTransforms[i] = self.player:get_transforms_sample(times[i])
-
-        self.player:stop()
+        clipsTransforms[i] = self.sampler:get_transforms_sample(times[i], blendingClipsIndices[i])
     end
 
     local transform = clipsTransforms[1]

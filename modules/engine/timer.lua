@@ -46,13 +46,13 @@ end
 function M:step(delta)
     local time = self.time + delta * self.speed
 
+    if self.loop and self.duration then
+        time = time % self.duration
+    end
+
     self.time = time
 
-    if self.loop and self.duration then
-        return time % self.duration
-    else
-        return time
-    end
+    return time
 end
 
 return M
