@@ -60,10 +60,31 @@ function M:__update_rig_indices()
     self.clipBoneIndexToRigIndex = clipBoneIndexToRigIndex
 end
 
+function M:get_bone_index_in_clip(name, clipIndex)
+    return table.index(self.clipsMetadata.clips[clipIndex].bonesIndices, name)
+end
+
 function M:set_skeleton(skeleton)
     self.skeleton = skeleton
 
     self:__update_rig_indices()
+end
+
+function M:get_clip_index_by_name(name)
+    local index
+
+    util.foreach(self.clipsMetadata.clips, function(clip, i)
+        if clip.name == name then
+            index = i
+            return true
+        end
+    end)
+
+    return index
+end
+
+function M:get_clip_name_by_index(index)
+    return self.clipsMetadata.clips[index].name
 end
 
 function M:play(name)
