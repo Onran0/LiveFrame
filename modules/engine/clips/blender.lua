@@ -39,13 +39,16 @@ function M:set_blending_clips(blendingClipsNames)
     self.blendingClipsIndices = blendingClipsIndices
 end
 
-function M:blend_transforms_samples(times, factors)
+function M:blend_transforms_samples(times, factors, useIndicesInsteadNames)
     local blendingClipsIndices = self.blendingClipsIndices
 
     local clipsTransforms = { }
 
     for i = 1, #blendingClipsIndices do
-        clipsTransforms[i] = self.sampler:get_transforms_sample(times[i], blendingClipsIndices[i])
+        clipsTransforms[i] = self.sampler:get_transforms_sample(
+                times[i], blendingClipsIndices[i],
+                useIndicesInsteadNames
+        )
     end
 
     local transform = clipsTransforms[1]
@@ -55,24 +58,21 @@ function M:blend_transforms_samples(times, factors)
     for i = 2, #clipsTransforms do
         local factor = factorsTable and factors[i - 1] or factors
 
-        util.foreach(
-                clipsTransforms[i],
-                function(nextBoneTransform, boneName)
-                    local boneTransform = transform[boneName]
+        for boneId, nextBoneTransform in pairs(clipsTransforms[i]) do
+            local boneTransform = transform[boneId]
 
-                    if nextBoneTransform[1] then
-                        boneTransform[1] = math_util.lerp(boneTransform[1] or { 0, 0, 0 }, nextBoneTransform[1], factor)
-                    end
+            if nextBoneTransform[1] then
+                boneTransform[1] = math_util.lerp(boneTransform[1] or { 0, 0, 0 }, nextBoneTransform[1], factor)
+            end
 
-                    if nextBoneTransform[2] then
-                        boneTransform[2] = quat.slerp(boneTransform[2] or quat_math.idt(), nextBoneTransform[2], factor)
-                    end
+            if nextBoneTransform[2] then
+                boneTransform[2] = quat.slerp(boneTransform[2] or quat_math.idt(), nextBoneTransform[2], factor)
+            end
 
-                    if nextBoneTransform[3] then
-                        boneTransform[3] = math_util.lerp(boneTransform[3] or { 0, 0, 0 }, nextBoneTransform[3], factor)
-                    end
-                end
-        )
+            if nextBoneTransform[3] then
+                boneTransform[3] = math_util.lerp(boneTransform[3] or { 0, 0, 0 }, nextBoneTransform[3], factor)
+            end
+        end
     end
 
     return transform

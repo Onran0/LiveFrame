@@ -9,11 +9,13 @@ function M.combine(clipsMetadataArray, overrideClipsNames)
 
     local combinedInterpTypesIndices = { }
     local combinedInterpFieldsIndices = { }
+    local combinedBonesIndices = { }
     local combinedClips = { }
 
     util.foreach(clipsMetadataArray, function(clipsMetadata, clipsMetadataIndex)
         local fromLocalInterpTypesIndicesToCombined = { }
         local fromLocalInterpFieldsIndicesToCombined = { }
+        local fromLocalBoneIndexToCombined = { }
 
         util.foreach(clipsMetadata.interpTypesIndices, function(type, index)
             if not table.has(combinedInterpTypesIndices, type) then
@@ -53,8 +55,27 @@ function M.combine(clipsMetadataArray, overrideClipsNames)
             ] = tbl
         end)
 
+        util.foreach(clipsMetadata.bonesIndices, function(value, index)
+            local combinedIndex
+
+            if not table.has(combinedBonesIndices, value) then
+                table.insert(combinedBonesIndices, value)
+                combinedIndex = #combinedBonesIndices
+            else
+                combinedIndex = table.index(combinedBonesIndices, value)
+            end
+
+            fromLocalBoneIndexToCombined[index] = combinedIndex
+        end)
+
         util.foreach(clipsMetadata.clips, function(clip)
-            local combinedClip = table.copy(clip)
+            local combinedClip = {
+                name = clip.name,
+                loop = clip.loop,
+                duration = clip.duration
+            }
+
+            local combinedBonesKeys = { }
 
             -- clip name overriding
             if
@@ -66,32 +87,46 @@ function M.combine(clipsMetadataArray, overrideClipsNames)
             end
 
             -- converting interpolation type and fields indices from local metadata space to combined
-            util.foreach(combinedClip.bonesKeys, function(transformsKeys)
+            for localBoneIndex, transformsKeys in pairs(clip.bonesKeys) do
+                local combinedBoneKeys = { }
+
                 for i = 1, 3 do
+                    local combinedTransformKeys = { }
+
                     if transformsKeys[i] and #transformsKeys[i] > 0 then
                         util.foreach(transformsKeys[i], function(key)
                             local localInterpTypeIndex = key[3]
 
+                            local combinedKey = table.copy(key)
+
                             if localInterpTypeIndex then
-                                key[3] = fromLocalInterpTypesIndicesToCombined[localInterpTypeIndex]
+                                combinedKey[3] = fromLocalInterpTypesIndicesToCombined[localInterpTypeIndex]
                             end
 
-                            if key[4] then
-                                local localFieldsValues = key[4]
+                            if combinedKey[4] then
+                                local localFieldsValues = combinedKey[4]
                                 local combinedFieldsValues = { }
 
                                 for j = 1, #localFieldsValues do
                                     combinedFieldsValues[
-                                        fromLocalInterpFieldsIndicesToCombined[localInterpTypeIndex][j]
+                                    fromLocalInterpFieldsIndicesToCombined[localInterpTypeIndex][j]
                                     ] = localFieldsValues[j]
                                 end
 
-                                key[4] = combinedFieldsValues
+                                combinedKey[4] = combinedFieldsValues
                             end
+
+                            table.insert(combinedTransformKeys, combinedKey)
                         end)
                     end
+
+                    combinedBoneKeys[i] = combinedTransformKeys
                 end
-            end)
+
+                combinedBonesKeys[fromLocalBoneIndexToCombined[localBoneIndex]] = combinedBoneKeys
+            end
+
+            combinedClip.bonesKeys = combinedBonesKeys
 
             table.insert(combinedClips, combinedClip)
         end)
@@ -100,6 +135,7 @@ function M.combine(clipsMetadataArray, overrideClipsNames)
     return {
         interpTypesIndices = combinedInterpTypesIndices,
         interpFieldsIndices = combinedInterpFieldsIndices,
+        bonesIndices = combinedBonesIndices,
         clips = combinedClips
     }
 end

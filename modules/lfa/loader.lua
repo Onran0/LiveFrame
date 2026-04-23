@@ -18,17 +18,17 @@ output table format:
         }
     },
 
+    -- indices for bones
+    bonesIndices = {
+        "spine",
+        "head"
+    },
+
     clips = {
         {
             name = "some_clip",
             loop = true,
             duration = 2,
-
-            -- indices for bones
-            bonesIndices = {
-                "spine",
-                "head"
-            },
 
             bonesKeys = {
                 -- first bone (with index 1)
@@ -200,7 +200,7 @@ local autoComputeInterpsTypes = {
         }
     end,
 
-    ["squad"] = function(keys, index, duration, loop)
+    ["squad"] = function(keys, index, _, loop)
         return {
             ["in-control"] = getControlQuat(keys, index, loop),
             ["out-control"] = getControlQuat(keys, index + 1, loop)
@@ -233,6 +233,7 @@ end
 local function loadFromTable(lfaTable)
     local interpTypesIndices = { }
     local interpFieldsIndices = { }
+    local bonesIndices = { }
 
     local clips = { }
 
@@ -291,7 +292,6 @@ local function loadFromTable(lfaTable)
     end
 
     for clipName, lfaClip in pairs(lfaTable.clips) do
-        local bonesIndices = { }
         local bonesKeys = { }
 
         util.foreach(lfaClip.keyframes, function(keyframe)
@@ -376,7 +376,6 @@ local function loadFromTable(lfaTable)
             name = clipName,
             loop = lfaClip.loop,
             duration = lfaClip.duration,
-            bonesIndices = bonesIndices,
             bonesKeys = bonesKeys
         })
     end
@@ -401,6 +400,7 @@ local function loadFromTable(lfaTable)
     {
         interpTypesIndices = interpTypesIndices,
         interpFieldsIndices = interpFieldsIndices,
+        bonesIndices = bonesIndices,
         clips = clips
     }
 end

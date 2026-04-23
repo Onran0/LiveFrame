@@ -8,11 +8,25 @@ setmetatable(M, { __index = timer })
 M.__index = M
 
 function M:new(sampler, skeleton)
-    return setmetatable(table.merge(timer:new(), {
+    local obj = setmetatable(table.merge(timer:new(), {
         sampler = sampler,
         skeleton = skeleton,
         paused = false
     }), self)
+
+    obj:__update_rig_indices()
+
+    return obj
+end
+
+function M:__update_rig_indices()
+    local boneIndexToRigIndex = { }
+
+    util.foreach(self.sampler:get_clips_metadata().bonesIndices, function(boneName, boneIndex)
+        boneIndexToRigIndex[boneIndex] = self.skeleton:index(boneName)
+    end)
+
+    self.boneIndexToRigIndex = boneIndexToRigIndex
 end
 
 function M:get_sampler()
@@ -21,23 +35,8 @@ end
 
 function M:set_sampler(sampler)
     self.sampler = sampler
-end
 
-function M:__update_rig_indices()
-    if not self.playingClip then
-        self.clipBoneIndexToRigIndex = nil
-        return
-    end
-
-    local clip = self.sampler:get_clip_by_index(self.playingClip)
-
-    local clipBoneIndexToRigIndex = { }
-
-    util.foreach(clip.bonesIndices, function(boneName, boneIndex)
-        clipBoneIndexToRigIndex[boneIndex] = self.skeleton:index(boneName)
-    end)
-
-    self.clipBoneIndexToRigIndex = clipBoneIndexToRigIndex
+    self:__update_rig_indices()
 end
 
 function M:set_skeleton(skeleton)
@@ -82,7 +81,7 @@ function M:is_paused()
 end
 
 function M:stop()
-    self.clipBoneIndexToRigIndex = nil
+    self.boneIndexToRigIndex = nil
 
     self.paused = false
     self.time = 0
@@ -127,7 +126,7 @@ function M:step(delta)
                     boneMatrix = mat4.mul(boneMatrix, mat4.scale(transform[3]))
                 end
 
-                self.skeleton:set_matrix(self.clipBoneIndexToRigIndex[index], boneMatrix)
+                self.skeleton:set_matrix(self.boneIndexToRigIndex[index], boneMatrix)
             end
     )
 end
