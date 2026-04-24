@@ -66,6 +66,10 @@ local function parseAttributeValue(value)
 
         return num
     elseif firstChar == '"' then
+        if value[#value] ~= '"' then
+            error('string literal must be end with quote char: ' .. value)
+        end
+
         return value:sub(2, #value - 1)
     elseif firstChar == '(' then
         local values = { }
