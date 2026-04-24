@@ -53,10 +53,8 @@ function M:blend_transforms_samples(times, factors, useIndicesInsteadNames)
 
     local transform = clipsTransforms[1]
 
-    local factorsTable = type(factors) == 'table'
-
     for i = 2, #clipsTransforms do
-        local factor = factorsTable and factors[i - 1] or factors
+        local factor = factors[i - 1]
 
         for boneId, nextBoneTransform in pairs(clipsTransforms[i]) do
             local boneTransform = transform[boneId]
