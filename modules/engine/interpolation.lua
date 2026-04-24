@@ -3,11 +3,24 @@ local math_util = require "util/math/math_util"
 
 local M = { }
 
+local function quatNlerp(a, b, t)
+    return quat_math.normalize({
+        math_util.lerp(a[1], b[1], t),
+        math_util.lerp(a[2], b[2], t),
+        math_util.lerp(a[3], b[3], t),
+        math_util.lerp(a[4], b[4], t)
+    })
+end
+
 local function squadSlerp(q1, q2, t)
     local dot = math.clamp(quat_math.dot(q1, q2), -1, 1)
 
+    if dot > 0.9995 then
+        return quatNlerp(q1, q2, t)
+    end
+
     local q3 = quat_math.normalize(
-            quat_math.sub(q2, quat_math.mul(
+            quat_math.sub(q2, quat_math.scale(
                     q1,
                     dot
             ))
@@ -16,8 +29,8 @@ local function squadSlerp(q1, q2, t)
     local theta = math.acos(dot) * t
 
     return quat_math.add(
-            quat_math.mul(q1, math.cos(theta)),
-            quat_math.mul(q3, math.sin(theta))
+            quat_math.scale(q1, math.cos(theta)),
+            quat_math.scale(q3, math.sin(theta))
     )
 end
 
@@ -52,14 +65,7 @@ M.functions = {
         )
     end,
 
-    nlerp = function(a, b, t)
-        return quat_math.normalize({
-            math_util.lerp(a[1], b[1], t),
-            math_util.lerp(a[2], b[2], t),
-            math_util.lerp(a[3], b[3], t),
-            math_util.lerp(a[4], b[4], t)
-        })
-    end,
+    nlerp = quatNlerp,
 
     slerp = quat.slerp,
 

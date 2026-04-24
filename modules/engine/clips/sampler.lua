@@ -89,7 +89,7 @@ function M:get_clip_duration(index)
 end
 
 function M:get_bone_transform_sample(boneIndex, currentTime, clipIndex, returnTable)
-   local clip = self.clipsMetadata.clips[clipIndex]
+    local clip = self.clipsMetadata.clips[clipIndex]
 
     local looped, duration = clip.loop, clip.duration
 
