@@ -33,6 +33,7 @@ local function loadSettings(settings)
     local layers = { }
 
     local parametersTypes = { }
+    local parametersIndices = { }
 
     local conditionsPrefix = "local "
 
@@ -55,6 +56,7 @@ local function loadSettings(settings)
 
     for index, parameter in ipairs(settings.parameters) do
         parametersTypes[parameter.name] = parameterTypeToIndex[parameter.type]
+        parametersIndices[parameter.name] = index
 
         conditionsPrefix = conditionsPrefix .. parameter.name
 
@@ -136,6 +138,7 @@ local function loadSettings(settings)
     return {
         clipsMetadataArray = clips_meta_combiner.combine(clipsMetadataArray, overrideClipsNames),
         parametersTypes = parametersTypes,
+        parametersIndices = parametersIndices,
         layers = layers
     }
 end
