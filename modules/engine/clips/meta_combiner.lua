@@ -3,10 +3,6 @@ local util = require "util/util"
 local M = { }
 
 function M.combine(clipsMetadataArray, overrideClipsNames)
-    if #clipsMetadataArray < 2 then
-        return clipsMetadataArray and clipsMetadataArray[1]
-    end
-
     local combinedInterpTypesIndices = { }
     local combinedInterpFieldsIndices = { }
     local combinedBonesIndices = { }
