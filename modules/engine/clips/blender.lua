@@ -1,6 +1,5 @@
 local math_util = require "util/math/math_util"
 local quat_math = require "util/math/quat_math"
-local util = require "util/util"
 
 local M = { }
 
@@ -32,9 +31,9 @@ function M:set_blending_clips(blendingClipsNames)
 
     local blendingClipsIndices = { }
 
-    util.foreach(blendingClipsNames, function(clipName, index)
+    for index, clipName in ipairs(blendingClipsNames) do
         blendingClipsIndices[index] = self.sampler:get_clip_index_by_name(clipName)
-    end)
+    end
 
     self.blendingClipsIndices = blendingClipsIndices
 end

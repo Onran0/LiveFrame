@@ -1,5 +1,4 @@
 local timer = require "engine/timer"
-local util = require "util/util"
 
 local M = { }
 
@@ -22,9 +21,9 @@ end
 function M:__update_rig_indices()
     local boneIndexToRigIndex = { }
 
-    util.foreach(self.sampler:get_clips_metadata().bonesIndices, function(boneName, boneIndex)
+    for boneIndex, boneName in ipairs(self.sampler:get_clips_metadata().bonesIndices) do
         boneIndexToRigIndex[boneIndex] = self.skeleton:index(boneName)
-    end)
+    end
 
     self.boneIndexToRigIndex = boneIndexToRigIndex
 end
@@ -107,28 +106,25 @@ function M:step(delta)
         return
     end
 
-    util.foreach(
-            self.sampler:get_transforms_sample(timer.step(self, delta), self.playingClip, true),
-            function(transform, index)
-                local boneMatrix
+    for index, transform in ipairs(self.sampler:get_transforms_sample(timer.step(self, delta), self.playingClip, true)) do
+        local boneMatrix
 
-                if transform[1] then
-                    boneMatrix = mat4.translate(transform[1])
-                else
-                    boneMatrix = mat4.idt()
-                end
+        if transform[1] then
+            boneMatrix = mat4.translate(transform[1])
+        else
+            boneMatrix = mat4.idt()
+        end
 
-                if transform[2] then
-                    boneMatrix = mat4.mul(boneMatrix, mat4.from_quat(transform[2]))
-                end
+        if transform[2] then
+            boneMatrix = mat4.mul(boneMatrix, mat4.from_quat(transform[2]))
+        end
 
-                if transform[3] then
-                    boneMatrix = mat4.mul(boneMatrix, mat4.scale(transform[3]))
-                end
+        if transform[3] then
+            boneMatrix = mat4.mul(boneMatrix, mat4.scale(transform[3]))
+        end
 
-                self.skeleton:set_matrix(self.boneIndexToRigIndex[index], boneMatrix)
-            end
-    )
+        self.skeleton:set_matrix(self.boneIndexToRigIndex[index], boneMatrix)
+    end
 end
 
 return M

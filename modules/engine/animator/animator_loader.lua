@@ -20,8 +20,6 @@ local parameterTypeToIndex = {
     trigger = constants.PARAMETER_TYPE_TRIGGER
 }
 
-local util = require "util/util"
-
 local loaders = require "engine/loaders"
 local clips_meta_combiner = require "engine/clips/meta_combiner"
 
@@ -38,7 +36,7 @@ local function loadSettings(settings)
 
     local conditionsPrefix = "local "
 
-    util.foreach(settings.clips, function(fileInfo)
+    for _, fileInfo in ipairs(settings.clips) do
         local ext = file.ext(fileInfo.file)
 
         if not loaders[ext] then
@@ -53,9 +51,9 @@ local function loadSettings(settings)
 
         table.insert(clipsMetadataIndices, fileInfo.id)
         table.insert(clipsMetadataArray, val)
-    end)
+    end
 
-    util.foreach(settings.parameters, function(parameter, index)
+    for index, parameter in ipairs(settings.parameters) do
         parametersTypes[parameter.name] = parameterTypeToIndex[parameter.type]
 
         conditionsPrefix = conditionsPrefix .. parameter.name
@@ -63,16 +61,16 @@ local function loadSettings(settings)
         if index ~= #settings.parameters then
             conditionsPrefix = conditionsPrefix .. ", "
         end
-    end)
+    end
 
     conditionsPrefix = conditionsPrefix .. ", t = ...; return "
 
-    util.foreach(settings.layers, function(layer)
+    for _, layer in ipairs(settings.layers) do
         local layerStatesIndices = { }
 
         local finalStates = { }
 
-        util.foreach(layer.states, function(state)
+        for _, state in ipairs(layer.states) do
             table.insert(layerStatesIndices, state.name)
 
             local fileId, clipName = parse_path(state.clip)
@@ -85,17 +83,17 @@ local function loadSettings(settings)
                 clip = finalClipName,
                 loop = state.loop
             })
-        end)
+        end
 
         local finalTransitions = { }
 
-        util.foreach(layer.transitions, function(transition)
+        for _, transition in ipairs(layer.transitions) do
             local conditionFunc, err = load(conditionsPrefix .. transition.condition)
 
             if err then
                 error(
-                    "failed to compile transition condition '" .. transition.condition .. "' in layer '"
-                    .. layer.name .. "': " .. err
+                        "failed to compile transition condition '" .. transition.condition .. "' in layer '"
+                                .. layer.name .. "': " .. err
                 )
             end
 
@@ -110,19 +108,19 @@ local function loadSettings(settings)
             }
 
             if type(transition.from) == "table" then
-                util.foreach(transition.from, function(fromState)
+                for _, fromState in ipairs(transition.from) do
                     local copy = table.copy(baseTable)
 
                     copy.from = table.index(layerStatesIndices, fromState)
 
                     table.insert(finalTransitions, copy)
-                end)
+                end
             else
                 baseTable.from = table.index(layerStatesIndices, transition.from)
 
                 table.insert(finalTransitions, baseTable)
             end
-        end)
+        end
 
         table.insert(layers, {
             name = layer.name,
@@ -133,7 +131,7 @@ local function loadSettings(settings)
             states = finalStates,
             transitions = finalTransitions
         })
-    end)
+    end
 
     return {
         clipsMetadataArray = clips_meta_combiner.combine(clipsMetadataArray, overrideClipsNames),

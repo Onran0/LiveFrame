@@ -1,4 +1,3 @@
-local util = require "util/util"
 local interpolation = require "engine/interpolation"
 
 local M = { }
@@ -28,9 +27,9 @@ function M:new(clipsMetadata)
 
     local interpIndexToFunc = { }
 
-    util.foreach(clipsMetadata.interpTypesIndices, function(interpType, interpIndex)
+    for interpIndex, interpType in ipairs(clipsMetadata.interpTypesIndices) do
         interpIndexToFunc[interpIndex] = interpolation.functions[interpType]
-    end)
+    end
 
     self.fromLocalInterpFieldsIndexToGlobal = fromLocalInterpFieldsIndexToGlobal
     self.interpIndexToFunc = interpIndexToFunc
@@ -67,12 +66,12 @@ end
 function M:get_clip_index_by_name(name)
     local index
 
-    util.foreach(self.clipsMetadata.clips, function(clip, i)
+    for i, clip in ipairs(self.clipsMetadata.clips) do
         if clip.name == name then
             index = i
-            return true
+            break
         end
-    end)
+    end
 
     return index
 end
@@ -109,15 +108,15 @@ function M:get_bone_transform_sample(boneIndex, currentTime, clipIndex, returnTa
         if transformKeys and #transformKeys > 0 then
             local keyFrom, keyTo
 
-            util.foreach(transformKeys, function(key, index)
+            for index, key in ipairs(transformKeys) do
                 local keyTime = key[2]
 
                 if keyTime > currentTime then
                     keyTo = key
                     keyFrom = transformKeys[index - 1]
-                    return true
+                    break
                 end
-            end)
+            end
 
             if not keyTo and not looped then
                 transform[i] = transformKeys[#transformKeys][1]
@@ -171,11 +170,11 @@ function M:get_transforms_sample(currentTime, clipIndex, useIndicesInsteadNames)
 
     local transforms = { }
 
-    util.foreach(clip.bonesKeys, function(_, index)
+    for index, _ in pairs(clip.bonesKeys) do
         transforms[
-            useIndicesInsteadNames and index or self.clipsMetadata.bonesIndices[index]
+        useIndicesInsteadNames and index or self.clipsMetadata.bonesIndices[index]
         ] = self:get_bone_transform_sample(index, currentTime, clipIndex, true)
-    end)
+    end
 
     return transforms
 end

@@ -70,8 +70,6 @@ output table format:
 
 local quat_math = require "util/math/quat_math"
 
-local util = require "util/util"
-
 local structure_parser = require "lfa/structure_parser"
 local analyzer = require "lfa/analyzer"
 
@@ -294,10 +292,10 @@ local function loadFromTable(lfaTable)
     for clipName, lfaClip in pairs(lfaTable.clips) do
         local bonesKeys = { }
 
-        util.foreach(lfaClip.keyframes, function(keyframe)
+        for _, keyframe in ipairs(lfaClip.keyframes) do
             local time = keyframe.time
 
-            util.foreach(keyframe.bones, function(bone)
+            for _, bone in pairs(keyframe.bones) do
                 table.insert_unique(bonesIndices, bone.name)
                 local idxInBonesKeys = table.index(bonesIndices, bone.name)
                 local boneKeys = bonesKeys[idxInBonesKeys]
@@ -311,16 +309,16 @@ local function loadFromTable(lfaTable)
                 local positionKeys, rotationKeys, scaleKeys = boneKeys[1], boneKeys[2], boneKeys[3]
 
                 local function addInterpTypes(transform)
-                    util.foreach({
+                    for _, interpType in ipairs({
                         transform.interpolation.input,
                         transform.interpolation.output
-                    }, function(interpType)
+                    }) do
                         if not table.has(analyzer.allDefaultInterpTypes, interpType) then
                             interpType = lfaTable.interps[interpType].type
                         end
 
                         table.insert_unique(interpTypesIndices, interpType)
-                    end)
+                    end
                 end
 
                 local function addToKeys(keys, transform, value)
@@ -369,8 +367,8 @@ local function loadFromTable(lfaTable)
                     addInterpTypes(boneScale)
                     addToKeys(scaleKeys, boneScale)
                 end
-            end)
-        end)
+            end
+        end
 
         table.insert(clips, {
             name = clipName,
@@ -380,7 +378,7 @@ local function loadFromTable(lfaTable)
         })
     end
 
-    util.foreach(deferredAutoComputeInterpsFields, function(deferredRequest)
+    for _, deferredRequest in ipairs(deferredAutoComputeInterpsFields) do
         local type = deferredRequest.type
         local loop = deferredRequest.loop
         local duration = deferredRequest.duration
@@ -394,7 +392,7 @@ local function loadFromTable(lfaTable)
         end
 
         keys[index][4] = plainFields
-    end)
+    end
 
     return
     {
