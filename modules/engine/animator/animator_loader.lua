@@ -1,3 +1,98 @@
+--[[
+result format:
+{
+    clipsMetadata = { ... }, -- check top of liveframe:lfa/loader.lua
+    parametersTypes = {
+        ["speed"] = constants.PARAMETER_TYPE_NUMBER,
+        ["jump"] = constants.PARAMETER_TYPE_TRIGGER,
+    },
+    parametersIndices = { -- needs because parametersTypes is unordered dictionary
+        ["speed"] = 1,
+        ["jump"] = 2
+    },
+    layers = {
+        {
+            name = "base",
+            masks = { "upper", "lower" }, -- can be nil, in this case layer affects to all masks
+            blendMode = constants.LAYER_BLEND_MODE_OVERRIDE,
+            weight = 1.0,
+            defaultState = 1,
+            states = {
+                {
+                    -- clip index from clipsMetadata
+                    clip = 0, -- base_idle
+                    loop = true
+                },
+                {
+                    clip = 1, -- base_run
+                    loop = true
+                },
+                {
+                    clip = 2, -- base_jump
+                    loop = true
+                }
+            },
+            transitions = {
+                {
+                    from = 1, -- from is always a one index. loader automatically unwraps from with array
+                    to = 2,
+                    priority = 0,
+                    interrupt = constants.INTERRUPT_HIGHER_PRIORITY,
+                    duration = 0.25,
+                    exitTime = 0.0, -- can be nil. for example defined
+                    blendCurve = constants.TRANSITION_BLEND_CURVE_LINEAR,
+                    conditionFunc = function(...) local speed, jump, t = ...; return <original condition> end
+                },
+                {
+                    from = 2,
+                    to = 1,
+                    priority = 0,
+                    interrupt = constants.INTERRUPT_HIGHER_PRIORITY,
+                    duration = 0.25,
+                    blendCurve = constants.TRANSITION_BLEND_CURVE_LINEAR,
+                    conditionFunc = function(...) local speed, jump, t = ...; return <original condition> end
+                },
+                {
+                    from = 1,
+                    to = 3,
+                    priority = 1,
+                    interrupt = constants.INTERRUPT_NONE,
+                    duration = 0.25,
+                    blendCurve = constants.TRANSITION_BLEND_CURVE_LINEAR,
+                    conditionFunc = function(...) local speed, jump, t = ...; return <original condition> end
+                },
+                {
+                    from = 2,
+                    to = 3,
+                    priority = 1,
+                    interrupt = constants.INTERRUPT_NONE,
+                    duration = 0.25,
+                    blendCurve = constants.TRANSITION_BLEND_CURVE_LINEAR,
+                    conditionFunc = function(...) local speed, jump, t = ...; return <original condition> end
+                },
+                {
+                    from = 3,
+                    to = 1,
+                    priority = 0,
+                    interrupt = constants.INTERRUPT_HIGHER_PRIORITY,
+                    duration = 0.25,
+                    blendCurve = constants.TRANSITION_BLEND_CURVE_LINEAR
+                },
+                {
+                    from = 3,
+                    to = 2,
+                    priority = 1,
+                    interrupt = constants.INTERRUPT_HIGHER_PRIORITY,
+                    duration = 0.25,
+                    blendCurve = constants.TRANSITION_BLEND_CURVE_LINEAR,
+                    conditionFunc = function(...) local speed, jump, t = ...; return <original condition> end
+                }
+            }
+        }
+    }
+}
+]]--
+
 local constants = require "engine/animator/constants"
 
 local layerBlendModeTypeToIndex = {
@@ -34,6 +129,7 @@ local function loadSettings(settings)
 
     local parametersTypes = { }
     local parametersIndices = { }
+    local allFinalStatesArray = { }
 
     local conditionsPrefix = "local "
 
@@ -44,10 +140,10 @@ local function loadSettings(settings)
             error("unknown animation clips format: '" .. ext .. "'")
         end
 
-        local val, err = pcall(loaders[ext], file.read(fileInfo.file))
+        local status, val = pcall(loaders[ext].load, file.read(fileInfo.file))
 
-        if err then
-            error("failed to load '" .. fileInfo.file .. "' animation clips file: " .. err)
+        if not status then
+            error("failed to load '" .. fileInfo.file .. "' animation clips file: " .. val)
         end
 
         table.insert(clipsMetadataIndices, fileInfo.id)
@@ -75,16 +171,26 @@ local function loadSettings(settings)
         for _, state in ipairs(layer.states) do
             table.insert(layerStatesIndices, state.name)
 
-            local fileId, clipName = parse_path(state.clip)
+            local fileId, clipName = unpack(state.clip:split(":"))
 
             local finalClipName = fileId .. "_" .. clipName
 
-            overrideClipsNames[table.index(clipsMetadataIndices, fileId)][clipName] = finalClipName
+            local idx = table.index(clipsMetadataIndices, fileId)
 
-            table.insert(finalStates, {
+            if not overrideClipsNames[idx] then
+                overrideClipsNames[idx] = { }
+            end
+
+            overrideClipsNames[idx][clipName] = finalClipName
+
+            local finalState = {
                 clip = finalClipName,
                 loop = state.loop
-            })
+            }
+
+            table.insert(finalStates, finalState)
+
+            table.insert(allFinalStatesArray, finalState)
         end
 
         local finalTransitions = { }
@@ -101,7 +207,7 @@ local function loadSettings(settings)
 
             local baseTable = {
                 to = table.index(layerStatesIndices, transition.to),
-                priority = transition.priority,
+                priority = transition.priority or 0,
                 interrupt = interruptTypeToIndex[transition["can-interrupt"] or "none"],
                 duration = transition.duration,
                 exitTime = transition["exit-time"],
@@ -135,8 +241,26 @@ local function loadSettings(settings)
         })
     end
 
+    local clipsMetadata = clips_meta_combiner.combine(clipsMetadataArray, overrideClipsNames)
+
+    for _, finalState in ipairs(allFinalStatesArray) do
+        local clipName = finalState.clip
+        local clipIndex
+
+        for mayClipIndex, mayClip in ipairs(clipsMetadata.clips) do
+            if mayClip.name == clipName then
+                clipIndex = mayClipIndex
+                break
+            end
+        end
+
+        if not clipIndex then error("unknown clip: " .. clipName) end
+
+        finalState.clip = clipIndex
+    end
+
     return {
-        clipsMetadataArray = clips_meta_combiner.combine(clipsMetadataArray, overrideClipsNames),
+        clipsMetadata = clipsMetadata,
         parametersTypes = parametersTypes,
         parametersIndices = parametersIndices,
         layers = layers
