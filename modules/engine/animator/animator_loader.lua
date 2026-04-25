@@ -16,20 +16,23 @@ result format:
             affectedBones = { 1, 2 }, -- indices of bones from clipsMetadata affected by this layer
             blendMode = constants.LAYER_BLEND_MODE_OVERRIDE,
             weight = 1.0,
-            defaultState = 1,
+            currentState = 1,
             states = {
                 {
                     -- clip index from clipsMetadata
                     clip = 0, -- base_idle
+                    timer = <instance of liveframe:engine/timer.lua>,
                     loop = true
                 },
                 {
                     clip = 1, -- base_run
+                    timer = <instance of liveframe:engine/timer.lua>,
                     loop = true
                 },
                 {
                     clip = 2, -- base_jump
-                    loop = true
+                    timer = <instance of liveframe:engine/timer.lua>,
+                    loop = false
                 }
             },
             transitions = {
@@ -49,6 +52,7 @@ result format:
                     priority = 0,
                     interrupt = constants.INTERRUPT_HIGHER_PRIORITY,
                     duration = 0.25,
+                    timer = <instance of liveframe:engine/timer.lua>,
                     blendCurve = constants.TRANSITION_BLEND_CURVE_LINEAR,
                     conditionFunc = function(...) local speed, jump, t = ...; return <original condition> end
                 },
@@ -58,6 +62,7 @@ result format:
                     priority = 1,
                     interrupt = constants.INTERRUPT_NONE,
                     duration = 0.25,
+                    timer = <instance of liveframe:engine/timer.lua>,
                     blendCurve = constants.TRANSITION_BLEND_CURVE_LINEAR,
                     conditionFunc = function(...) local speed, jump, t = ...; return <original condition> end
                 },
@@ -67,6 +72,7 @@ result format:
                     priority = 1,
                     interrupt = constants.INTERRUPT_NONE,
                     duration = 0.25,
+                    timer = <instance of liveframe:engine/timer.lua>,
                     blendCurve = constants.TRANSITION_BLEND_CURVE_LINEAR,
                     conditionFunc = function(...) local speed, jump, t = ...; return <original condition> end
                 },
@@ -76,6 +82,7 @@ result format:
                     priority = 0,
                     interrupt = constants.INTERRUPT_HIGHER_PRIORITY,
                     duration = 0.25,
+                    timer = <instance of liveframe:engine/timer.lua>,
                     blendCurve = constants.TRANSITION_BLEND_CURVE_LINEAR
                 },
                 {
@@ -84,6 +91,7 @@ result format:
                     priority = 1,
                     interrupt = constants.INTERRUPT_HIGHER_PRIORITY,
                     duration = 0.25,
+                    timer = <instance of liveframe:engine/timer.lua>,
                     blendCurve = constants.TRANSITION_BLEND_CURVE_LINEAR,
                     conditionFunc = function(...) local speed, jump, t = ...; return <original condition> end
                 }
@@ -117,6 +125,7 @@ local parameterTypeToIndex = {
 
 local loaders = require "engine/loaders"
 local clips_meta_combiner = require "engine/clips/meta_combiner"
+local timer = require "engine/timer"
 
 local M = { }
 
@@ -200,8 +209,11 @@ local function loadSettings(settings)
 
             overrideClipsNames[idx][clipName] = finalClipName
 
+            local stateTimer = timer:new()
+
             local finalState = {
                 clip = finalClipName,
+                timer = stateTimer,
                 loop = state.loop
             }
 
@@ -227,6 +239,7 @@ local function loadSettings(settings)
                 priority = transition.priority or 0,
                 interrupt = interruptTypeToIndex[transition["can-interrupt"] or "none"],
                 duration = transition.duration,
+                timer = timer:new(transition.duration),
                 exitTime = transition["exit-time"],
                 blendCurve = transitionBlendCurveTypeToIndex[transition["blend-curve"] or "linear"],
                 conditionFunc = conditionFunc
@@ -252,7 +265,7 @@ local function loadSettings(settings)
             affectedBones = affectedBones,
             blendMode = layerBlendModeTypeToIndex[layer["blend-mode"] or "override"],
             weight = layer.weight or 1.0,
-            defaultState = table.index(layerStatesIndices, layer["default-state"]),
+            currentState = table.index(layerStatesIndices, layer["default-state"]),
             states = finalStates,
             transitions = finalTransitions
         })
@@ -263,10 +276,12 @@ local function loadSettings(settings)
     for _, finalState in ipairs(allFinalStatesArray) do
         local clipName = finalState.clip
         local clipIndex
+        local clip
 
         for mayClipIndex, mayClip in ipairs(clipsMetadata.clips) do
             if mayClip.name == clipName then
                 clipIndex = mayClipIndex
+                clip = mayClip
                 break
             end
         end
@@ -274,6 +289,11 @@ local function loadSettings(settings)
         if not clipIndex then error("unknown clip: " .. clipName) end
 
         finalState.clip = clipIndex
+
+        local stateTimer = finalState.timer
+
+        stateTimer:set_duration(clip.duration)
+        stateTimer:set_loop(clip.loop)
     end
 
     for _, layer in ipairs(layers) do
