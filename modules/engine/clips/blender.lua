@@ -6,11 +6,7 @@ local M = { }
 M.__index = M
 
 function M:new(sampler)
-    return setmetatable({
-        sampler = sampler,
-        blendingClipsNames = { },
-        blendingClipsIndices = { }
-    }, self)
+    return setmetatable({ sampler = sampler }, self)
 end
 
 function M:get_sampler()
@@ -19,28 +15,9 @@ end
 
 function M:set_sampler(sampler)
     self.sampler = sampler
-    self:set_blending_clips(self.blendingClipsNames)
 end
 
-function M:get_blending_clips()
-    return self.blendingClipsNames
-end
-
-function M:set_blending_clips(blendingClipsNames)
-    self.blendingClipsNames = blendingClipsNames
-
-    local blendingClipsIndices = { }
-
-    for index, clipName in ipairs(blendingClipsNames) do
-        blendingClipsIndices[index] = self.sampler:get_clip_index_by_name(clipName)
-    end
-
-    self.blendingClipsIndices = blendingClipsIndices
-end
-
-function M:blend_transforms_samples(times, factors, useIndicesInsteadNames)
-    local blendingClipsIndices = self.blendingClipsIndices
-
+function M:blend_transforms_samples(times, factors, blendingClipsIndices, useIndicesInsteadNames)
     local clipsTransforms = { }
 
     for i = 1, #blendingClipsIndices do
