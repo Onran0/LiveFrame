@@ -27,25 +27,65 @@ function M:blend_transforms_samples(times, factors, blendingClipsIndices, useInd
         )
     end
 
-    local transform = clipsTransforms[1]
+    local transform = { }
 
-    for i = 2, #clipsTransforms do
-        local factor = factors[i - 1]
+    for i = 1, #clipsTransforms do
+        local factor = factors[i]
 
         for boneId, nextBoneTransform in pairs(clipsTransforms[i]) do
             local boneTransform = transform[boneId]
 
+            if not boneTransform then
+                boneTransform = { }
+                transform[boneId] = boneTransform
+            end
+
             if nextBoneTransform[1] then
-                boneTransform[1] = math_util.lerp(boneTransform[1] or { 0, 0, 0 }, nextBoneTransform[1], factor)
+                if boneTransform[1] then
+                    boneTransform[1] = vec3.add(
+                            boneTransform[1],
+                            vec3.mul(nextBoneTransform[1], factor)
+                    )
+                else
+                    boneTransform[1] = vec3.mul(nextBoneTransform[1], factor)
+                end
             end
 
             if nextBoneTransform[2] then
-                boneTransform[2] = quat.slerp(boneTransform[2] or quat_math.idt(), nextBoneTransform[2], factor)
+                if boneTransform[2] then
+                    local accumulated = boneTransform[2]
+                    local next = nextBoneTransform[2]
+                    local factorMul = 1
+
+                    if quat_math.dot(accumulated, next) < 0 then
+                        factorMul = -1
+                    end
+
+                    boneTransform[2] = quat_math.add(
+                            accumulated,
+                            quat_math.mul(next, factor * factorMul)
+                    )
+                else
+                    boneTransform[2] = quat_math.mul(nextBoneTransform[2], factor)
+                end
             end
 
             if nextBoneTransform[3] then
-                boneTransform[3] = math_util.lerp(boneTransform[3] or { 0, 0, 0 }, nextBoneTransform[3], factor)
+                if boneTransform[3] then
+                    boneTransform[3] = vec3.add(
+                            boneTransform[3],
+                            vec3.mul(nextBoneTransform[3], factor)
+                    )
+                else
+                    boneTransform[3] = vec3.mul(nextBoneTransform[3], factor)
+                end
             end
+        end
+    end
+
+    for _, boneTransform in pairs(transform) do
+        if boneTransform[2] then
+            boneTransform[2] = quat_math.normalize(boneTransform[2])
         end
     end
 
