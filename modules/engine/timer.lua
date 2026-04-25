@@ -43,6 +43,10 @@ function M:set_duration(duration)
     self.duration = duration
 end
 
+function M:is_end()
+    return self.time >= self.duration
+end
+
 function M:step(delta)
     local time = self.time + delta * self.speed
 
