@@ -13,7 +13,7 @@ result format:
     layers = {
         {
             name = "base",
-            masks = { "upper", "lower" }, -- can be nil, in this case layer affects to all masks
+            affectedBones = { 1, 2 }, -- indices of bones from clipsMetadata affected by this layer
             blendMode = constants.LAYER_BLEND_MODE_OVERRIDE,
             weight = 1.0,
             defaultState = 1,
@@ -131,6 +131,8 @@ local function loadSettings(settings)
     local parametersIndices = { }
     local allFinalStatesArray = { }
 
+    local affectedBonesByClips = { }
+
     local conditionsPrefix = "local "
 
     for _, fileInfo in ipairs(settings.clips) do
@@ -144,6 +146,16 @@ local function loadSettings(settings)
 
         if not status then
             error("failed to load '" .. fileInfo.file .. "' animation clips file: " .. val)
+        end
+
+        for _, clip in ipairs(val.clips) do
+            local affectedBonesByClip = { }
+
+            for index, _ in pairs(clip.bonesKeys) do
+                table.insert(affectedBonesByClip, val.bonesIndices[index])
+            end
+
+            affectedBonesByClips[fileInfo.id .. "_" .. clip.name] = affectedBonesByClip
         end
 
         table.insert(clipsMetadataIndices, fileInfo.id)
@@ -167,6 +179,7 @@ local function loadSettings(settings)
         local layerStatesIndices = { }
 
         local finalStates = { }
+        local affectedBones = { }
 
         for _, state in ipairs(layer.states) do
             table.insert(layerStatesIndices, state.name)
@@ -179,6 +192,10 @@ local function loadSettings(settings)
 
             if not overrideClipsNames[idx] then
                 overrideClipsNames[idx] = { }
+            end
+
+            for _, affectedBone in ipairs(affectedBonesByClips[finalClipName]) do
+                table.insert_unique(affectedBones, affectedBone)
             end
 
             overrideClipsNames[idx][clipName] = finalClipName
@@ -232,7 +249,7 @@ local function loadSettings(settings)
 
         table.insert(layers, {
             name = layer.name,
-            masks = (layer.masks or layer.mask) and (layer.masks and layer.masks or { layer.mask }),
+            affectedBones = affectedBones,
             blendMode = layerBlendModeTypeToIndex[layer["blend-mode"] or "override"],
             weight = layer.weight or 1.0,
             defaultState = table.index(layerStatesIndices, layer["default-state"]),
@@ -257,6 +274,14 @@ local function loadSettings(settings)
         if not clipIndex then error("unknown clip: " .. clipName) end
 
         finalState.clip = clipIndex
+    end
+
+    for _, layer in ipairs(layers) do
+        local affectedBones = layer.affectedBones
+
+        for index, affectedBone in ipairs(affectedBones) do
+            affectedBones[index] = table.index(clipsMetadata.bonesIndices, affectedBone)
+        end
     end
 
     return {
