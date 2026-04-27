@@ -1,4 +1,3 @@
-local math_util = require "util/math/math_util"
 local quat_math = require "util/math/quat_math"
 
 local M = { }
@@ -17,22 +16,13 @@ function M:set_sampler(sampler)
     self.sampler = sampler
 end
 
-function M:blend_transforms_samples(times, factors, blendingClipsIndices, useIndicesInsteadNames)
-    local clipsTransforms = { }
-
-    for i = 1, #blendingClipsIndices do
-        clipsTransforms[i] = self.sampler:get_transforms_sample(
-                times[i], blendingClipsIndices[i],
-                useIndicesInsteadNames
-        )
-    end
-
+function M:blend_transforms(blendingTransforms, factors)
     local transform = { }
 
-    for i = 1, #clipsTransforms do
+    for i = 1, #blendingTransforms do
         local factor = factors[i]
 
-        for boneId, nextBoneTransform in pairs(clipsTransforms[i]) do
+        for boneId, nextBoneTransform in pairs(blendingTransforms[i]) do
             local boneTransform = transform[boneId]
 
             if not boneTransform then
@@ -90,6 +80,19 @@ function M:blend_transforms_samples(times, factors, blendingClipsIndices, useInd
     end
 
     return transform
+end
+
+function M:calculate_samples_and_blend(times, blendingClipsIndices, factors, useIndicesInsteadNames)
+    local clipsTransforms = { }
+
+    for i = 1, #blendingClipsIndices do
+        clipsTransforms[i] = self.sampler:get_transforms_sample(
+                times[i], blendingClipsIndices[i],
+                useIndicesInsteadNames
+        )
+    end
+
+    return M:blend_transforms(clipsTransforms, factors)
 end
 
 return M
