@@ -19,6 +19,10 @@ function M:set_time(time)
     self.time = time
 end
 
+function M:reset()
+    self.time = 0
+end
+
 function M:get_normalized_time()
     return self.time / self.duration
 end
@@ -56,10 +60,13 @@ function M:is_end()
 end
 
 function M:step(delta)
+    local duration = self.duration
     local time = self.time + delta * self.speed
 
-    if self.loop and self.duration then
-        time = time % self.duration
+    if self.loop then
+        time = time % duration
+    elseif duration and time > duration then
+        time = duration
     end
 
     self.time = time
