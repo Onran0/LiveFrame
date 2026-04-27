@@ -92,7 +92,7 @@ function M:calculate_samples_and_blend(times, blendingClipsIndices, factors, use
         )
     end
 
-    return M:blend_transforms(clipsTransforms, factors)
+    return self:blend_transforms(clipsTransforms, factors)
 end
 
 return M
