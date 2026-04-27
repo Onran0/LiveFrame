@@ -19,6 +19,14 @@ function M:set_time(time)
     self.time = time
 end
 
+function M:get_normalized_time()
+    return self.time / self.duration
+end
+
+function M:set_normalized_time(normTime)
+    self.time = normTime * self.duration
+end
+
 function M:is_looped()
     return self.loop
 end
