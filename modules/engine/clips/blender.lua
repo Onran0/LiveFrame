@@ -103,7 +103,7 @@ local function blendLayer(prevBoneTransform, nextBoneTransform, weight)
     end
 end
 
-function M:blend_transforms(mode, blendingTransforms, factors)
+function M:blend_transforms(mode, blendingTransforms, factors, canApplyBlendCheck)
     local transform = { }
 
     local blendFunc = mode == BLEND_MODE_AVERAGE and blendAverage or blendLayer
@@ -119,7 +119,9 @@ function M:blend_transforms(mode, blendingTransforms, factors)
                 transform[boneId] = boneTransform
             end
 
-            blendFunc(boneTransform, nextBoneTransform, factor)
+            if canApplyBlendCheck and canApplyBlendCheck(i, boneId) then
+                blendFunc(boneTransform, nextBoneTransform, factor)
+            end
         end
     end
 
