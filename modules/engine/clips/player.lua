@@ -1,3 +1,4 @@
+local math_util = require "util/math/math_util"
 local timer = require "engine/timer"
 
 local M = { }
@@ -107,23 +108,10 @@ function M:step(delta)
     end
 
     for index, transform in ipairs(self.sampler:get_transforms_sample(timer.step(self, delta), self.playingClip, true)) do
-        local boneMatrix
-
-        if transform[1] then
-            boneMatrix = mat4.translate(transform[1])
-        else
-            boneMatrix = mat4.idt()
-        end
-
-        if transform[2] then
-            boneMatrix = mat4.mul(boneMatrix, mat4.from_quat(transform[2]))
-        end
-
-        if transform[3] then
-            boneMatrix = mat4.mul(boneMatrix, mat4.scale(transform[3]))
-        end
-
-        self.skeleton:set_matrix(self.boneIndexToRigIndex[index], boneMatrix)
+        self.skeleton:set_matrix(
+                self.boneIndexToRigIndex[index],
+                math_util.compose_matrix_from_transform(transform)
+        )
     end
 end
 
