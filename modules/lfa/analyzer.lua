@@ -90,7 +90,7 @@ local KEYFRAME_TYPE = "keyframe"
 
 local SCOPE_TYPE = "scope"
 local BONE_TYPE = "bone"
-local TRIGGER_TYPE = "trigger"
+local EVENT_TYPE = "event"
 
 local POSITION_TYPE = "position"
 local ROTATION_TYPE = "rotation"
@@ -154,7 +154,7 @@ local types = {
     KEYFRAME_TYPE,
     SCOPE_TYPE,
     BONE_TYPE,
-    TRIGGER_TYPE,
+    EVENT_TYPE,
     POSITION_TYPE,
     ROTATION_TYPE,
     SCALE_TYPE
@@ -180,7 +180,7 @@ local possibleElementsInRoot = { CLIP_TYPE, INTERP_TYPE }
 local possibleChildrenTypes = {
     [INTERP_TYPE] = { INTERP_FIELD_TYPE },
     [CLIP_TYPE] = { KEYFRAME_TYPE },
-    [KEYFRAME_TYPE] = { SCOPE_TYPE, BONE_TYPE, TRIGGER_TYPE },
+    [KEYFRAME_TYPE] = { SCOPE_TYPE, BONE_TYPE, EVENT_TYPE },
     [SCOPE_TYPE] = { SCOPE_TYPE, BONE_TYPE },
     [BONE_TYPE] = { POSITION_TYPE, ROTATION_TYPE, SCALE_TYPE },
 }
@@ -224,7 +224,7 @@ local possibleAttributes = {
         [ATTR_IN_ROTATION_INTERP] = VALUE_TYPE_STRING,
         [ATTR_OUT_ROTATION_INTERP] = VALUE_TYPE_STRING
     },
-    [TRIGGER_TYPE] = {
+    [EVENT_TYPE] = {
         [ATTR_NAME] = VALUE_TYPE_STRING,
         [ATTR_VALUE] = {
             VALUE_TYPE_NUMBER,
@@ -261,7 +261,7 @@ local requiredAttributes = {
     [KEYFRAME_TYPE] = { ATTR_TIME },
     [SCOPE_TYPE] = { },
     [BONE_TYPE] = { ATTR_NAME },
-    [TRIGGER_TYPE] = { ATTR_NAME },
+    [EVENT_TYPE] = { ATTR_NAME },
     [POSITION_TYPE] = { ATTR_VALUE },
     [ROTATION_TYPE] = { ATTR_VALUE },
     [SCALE_TYPE] = { ATTR_VALUE }

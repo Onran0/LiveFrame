@@ -81,7 +81,7 @@
 
 ***Допустимые вложенные элементы***
 
-`trigger`;\
+`event`;\
 `scope`;\
 `bone`.
 
@@ -102,7 +102,7 @@
 > [!NOTE]
 > Список ключ-кадров в `animation` должен быть отсортирован в порядке возрастания времени.
 
-### Элемент `trigger`
+### Элемент `event`
 
 ***Описание***
 
@@ -119,19 +119,19 @@
 ```
 ... {
     ... {
-        @trigger name "speed" value 2
+        @event name "speed" value 2
         
         ...
     }
 
     ... {
-        @trigger name "attack"
+        @event name "attack"
         
         ...
     }
     
     ... {
-        @trigger name "speed" value 1
+        @event name "speed" value 1
         
         ...
     }
