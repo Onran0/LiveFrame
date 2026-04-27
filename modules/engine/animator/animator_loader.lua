@@ -20,17 +20,20 @@ result format:
             states = {
                 {
                     -- clip index from clipsMetadata
+                    name = "state1", -- for event handlers
                     clip = 0, -- base_idle
                     timer = <instance of liveframe:engine/timer.lua>,
                     loop = true
                 },
                 {
                     clip = 1, -- base_run
+                    name = "state2",
                     timer = <instance of liveframe:engine/timer.lua>,
                     loop = true
                 },
                 {
                     clip = 2, -- base_jump
+                    name = "state3",
                     timer = <instance of liveframe:engine/timer.lua>,
                     loop = false
                 }
@@ -206,6 +209,7 @@ local function loadSettings(settings)
             local stateTimer = timer:new()
 
             local finalState = {
+                name = state.name,
                 clip = finalClipName,
                 timer = stateTimer,
                 loop = state.loop

@@ -9,7 +9,7 @@ local M = { }
 
 M.__index = M
 
-function M:new(loadedSettings, skeleton)
+function M:new(loadedSettings, skeleton, eventHandlers)
     local samplerInstance = sampler:new(loadedSettings.clipsMetadata)
 
     local parametersValues = { }
@@ -33,7 +33,8 @@ function M:new(loadedSettings, skeleton)
         layers = loadedSettings.layers,
         speed = 1,
         paused = false,
-        skeleton = skeleton
+        skeleton = skeleton,
+        eventHandlers = eventHandlers or { }
     }, self)
 
     self.__update_rig_indices(obj)
@@ -51,7 +52,30 @@ function M:__update_rig_indices()
     self.boneIndexToRigIndex = boneIndexToRigIndex
 end
 
-function M:__step_layer(delta, layer)
+function M:__check_events(prevTime, time, state, layerIndex, inner)
+    if prevTime ~= time then
+        local clip = self.sampler:get_clips_metadata().clips[state.clip]
+
+        if not inner and state.timer:is_looped() and (prevTime - time) > state.timer:get_duration() / 2 then
+            self:__check_events(prevTime, state.timer:get_duration(), state, layerIndex, true)
+            self:__check_events(-0.0001, time, state, layerIndex, true)
+        else
+            for _, event in ipairs(clip.events) do
+                local evTime = event.time
+
+                if evTime > prevTime and evTime <= time then
+                    local handler = self.eventHandlers[event.name]
+
+                    if handler then
+                        handler(event.value, state.name, layerIndex, state, clip)
+                    end
+                end
+            end
+        end
+    end
+end
+
+function M:__step_layer(delta, layer, layerIndex)
     local currentStateIndex = layer.currentState
     local currentTransitionIndex = layer.currentTransition
 
@@ -92,8 +116,14 @@ function M:__step_layer(delta, layer)
 
         currentTransition.timer:step(delta)
 
+        local prevFromTime = stateFrom.timer:get_time()
+        local prevToTime = stateTo.timer:get_time()
+
         local fromTime = stateFrom.timer:step(delta)
         local toTime = stateTo.timer:step(delta)
+
+        self:__check_events(prevFromTime, fromTime, stateFrom, layerIndex)
+        self:__check_events(prevToTime, toTime, stateTo, layerIndex)
 
         local transitionNormTime = math.clamp(currentTransition.timer:get_normalized_time(), 0, 1)
 
@@ -116,7 +146,13 @@ function M:__step_layer(delta, layer)
         end
     end
 
-    return self.sampler:get_transforms_sample(currentState.timer:step(delta), currentState.clip, true)
+    local prevTime = currentState.timer:get_time()
+
+    local time = currentState.timer:step(delta)
+
+    self:__check_events(prevTime, time, currentState, layerIndex)
+
+    return self.sampler:get_transforms_sample(time, currentState.clip, true)
 end
 
 function M:__set_parameter(name, value)
@@ -170,7 +206,7 @@ function M:step(delta)
     local pose
 
     if #layers == 1 then
-        pose = self:__step_layer(delta, layers[1])
+        pose = self:__step_layer(delta, layers[1], 1)
     else
         local transforms = { }
         local weights = { }
@@ -178,7 +214,7 @@ function M:step(delta)
         for i = 1, #layers do
             local layer = layers[i]
 
-            transforms[i] = self:__step_layer(delta, layer)
+            transforms[i] = self:__step_layer(delta, layer, i)
             weights[i] = layer.weight
         end
 

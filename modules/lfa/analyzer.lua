@@ -33,6 +33,15 @@ output lfaTable structure:
             keyframes = {
                 {
                     time = 0,
+                    events = {
+                        {
+                            name = "event1"
+                        },
+                        {
+                            name = "event2",
+                            value = 32"
+                        }
+                    },
                     bones = {
                         {
                             name = "spine",
@@ -54,6 +63,7 @@ output lfaTable structure:
                 },
                 {
                     time = 1,
+                    events = { },
                     bones = {
                         {
                             name = "spine",
@@ -599,6 +609,17 @@ local function analyzeElementSpecial(element, lfaTable)
                 lfaTable.temp.scopeByBone or {},
                 scopeByBone
         )
+    elseif element.type == EVENT_TYPE then
+        local keyframe = lfaTable.temp.keyframeByElement[element]
+
+        local value = element.attributes[ATTR_VALUE]
+
+        if value then validateAndGetValueType(value) end
+
+        table.insert(keyframe.events, {
+            name = element.attributes[ATTR_NAME],
+            value = value
+        })
     elseif element.type == KEYFRAME_TYPE then
         local clipByElement = lfaTable.temp.clipByElement
         local clip = clipByElement[element]
@@ -614,6 +635,7 @@ local function analyzeElementSpecial(element, lfaTable)
 
         local keyframeTable = {
             time = time,
+            events = { },
             bones = { }
         }
 

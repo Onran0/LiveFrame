@@ -68,7 +68,8 @@ function M.combine(clipsMetadataArray, overrideClipsNames)
             local combinedClip = {
                 name = clip.name,
                 loop = clip.loop,
-                duration = clip.duration
+                duration = clip.duration,
+                events = clip.events
             }
 
             local combinedBonesKeys = { }

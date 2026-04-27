@@ -32,6 +32,18 @@ output table format:
 
             affectedBones = { 1 }, -- indices of affected bones
 
+            events = {
+                {
+                    name = "event1",
+                    time = 1
+                },
+                {
+                    name = "event1",
+                    value = { 1, 2, 3, 5 }",
+                    time = 2
+                }
+            },
+
             bonesKeys = {
                 -- first bone (with index 1)
                 -- arrays of position, rotation and scale keys
@@ -320,9 +332,18 @@ local function loadFromTable(lfaTable)
     for clipName, lfaClip in pairs(lfaTable.clips) do
         local bonesKeys = { }
         local affectedBones = { }
+        local events = { }
 
         for _, keyframe in ipairs(lfaClip.keyframes) do
             local time = keyframe.time
+
+            for _, event in ipairs(keyframe.events) do
+                table.insert(events, {
+                    name = event.name,
+                    value = event.value,
+                    time = time
+                })
+            end
 
             for _, bone in pairs(keyframe.bones) do
                 table.insert_unique(bonesIndices, bone.name)
@@ -405,8 +426,9 @@ local function loadFromTable(lfaTable)
             name = clipName,
             loop = lfaClip.loop,
             duration = lfaClip.duration,
-            bonesKeys = bonesKeys,
-            affectedBones = affectedBones
+            affectedBones = affectedBones,
+            events = events,
+            bonesKeys = bonesKeys
         })
     end
 
