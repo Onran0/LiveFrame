@@ -122,7 +122,14 @@ function M.combine(clipsMetadataArray, overrideClipsNames)
                 combinedBonesKeys[fromLocalBoneIndexToCombined[localBoneIndex]] = combinedBoneKeys
             end
 
+            local combinedAffectedBones = { }
+
+            for i, boneIndex in ipairs(clip.affectedBones) do
+                combinedAffectedBones[i] = fromLocalBoneIndexToCombined[boneIndex]
+            end
+
             combinedClip.bonesKeys = combinedBonesKeys
+            combinedClip.affectedBones = combinedAffectedBones
 
             table.insert(combinedClips, combinedClip)
         end

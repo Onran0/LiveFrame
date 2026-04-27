@@ -30,6 +30,8 @@ output table format:
             loop = true,
             duration = 2,
 
+            affectedBones = { 1 }, -- indices of affected bones
+
             bonesKeys = {
                 -- first bone (with index 1)
                 -- arrays of position, rotation and scale keys
@@ -61,6 +63,30 @@ output table format:
                     },
                     -- scale keys (here's no one)
                     { }
+                },
+                 -- for bones which undefined in LFA will auto generate default keys.
+                 -- these bones indices will not be added into affectedBones field.
+                 -- also, if bone transform defined, but one component is missing,
+                 -- for it will auto generate default key.
+                {
+                    {
+                        {
+                            { 0, 0, 0 },
+                            0
+                        }
+                    },
+                    {
+                        {
+                            { 1, 0, 0, 0 },
+                            0
+                        }
+                    },
+                    {
+                        {
+                            { 1, 1, 1 },
+                            0
+                        }
+                    }
                 }
             }
         }
@@ -293,12 +319,15 @@ local function loadFromTable(lfaTable)
 
     for clipName, lfaClip in pairs(lfaTable.clips) do
         local bonesKeys = { }
+        local affectedBones = { }
 
         for _, keyframe in ipairs(lfaClip.keyframes) do
             local time = keyframe.time
 
             for _, bone in pairs(keyframe.bones) do
                 table.insert_unique(bonesIndices, bone.name)
+                table.insert_unique(affectedBones, table.index(bonesIndices, bone.name))
+
                 local idxInBonesKeys = table.index(bonesIndices, bone.name)
                 local boneKeys = bonesKeys[idxInBonesKeys]
 
@@ -376,7 +405,8 @@ local function loadFromTable(lfaTable)
             name = clipName,
             loop = lfaClip.loop,
             duration = lfaClip.duration,
-            bonesKeys = bonesKeys
+            bonesKeys = bonesKeys,
+            affectedBones = affectedBones
         })
     end
 

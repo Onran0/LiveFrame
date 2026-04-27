@@ -158,13 +158,7 @@ local function loadSettings(settings)
         end
 
         for _, clip in ipairs(val.clips) do
-            local affectedBonesByClip = { }
-
-            for index, _ in pairs(clip.bonesKeys) do
-                table.insert(affectedBonesByClip, val.bonesIndices[index])
-            end
-
-            affectedBonesByClips[fileInfo.id .. "_" .. clip.name] = affectedBonesByClip
+            affectedBonesByClips[fileInfo.id .. "_" .. clip.name] = clip.affectedBones
         end
 
         table.insert(clipsMetadataIndices, fileInfo.id)
@@ -294,14 +288,6 @@ local function loadSettings(settings)
 
         stateTimer:set_duration(clip.duration)
         stateTimer:set_loop(finalState.loop)
-    end
-
-    for _, layer in ipairs(layers) do
-        local affectedBones = layer.affectedBones
-
-        for index, affectedBone in ipairs(affectedBones) do
-            affectedBones[index] = table.index(clipsMetadata.bonesIndices, affectedBone)
-        end
     end
 
     return {
