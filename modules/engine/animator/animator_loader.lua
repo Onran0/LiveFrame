@@ -293,7 +293,7 @@ local function loadSettings(settings)
         local stateTimer = finalState.timer
 
         stateTimer:set_duration(clip.duration)
-        stateTimer:set_loop(clip.loop)
+        stateTimer:set_loop(finalState.loop)
     end
 
     for _, layer in ipairs(layers) do
