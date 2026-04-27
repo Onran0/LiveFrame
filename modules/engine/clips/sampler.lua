@@ -140,7 +140,7 @@ function M:get_bone_transform_sample(boneIndex, currentTime, clipIndex, returnTa
 
                 local factor = (currentTime - keyFromTime) / (keyToTime - keyFromTime)
 
-                local interpFunc = self.interpIndexToFunc[interpTypeIndex]
+                local interpFunc = self.interpIndexToFunc[interpTypeIndex] or interpolation.functions.step
 
                 local value
 

@@ -1,3 +1,5 @@
+local place_default_bones_transforms = require "util/place_default_bones_transforms"
+
 local M = { }
 
 function M.combine(clipsMetadataArray, overrideClipsNames)
@@ -125,6 +127,8 @@ function M.combine(clipsMetadataArray, overrideClipsNames)
             table.insert(combinedClips, combinedClip)
         end
     end
+
+    place_default_bones_transforms(combinedClips, combinedBonesIndices)
 
     return {
         interpTypesIndices = combinedInterpTypesIndices,

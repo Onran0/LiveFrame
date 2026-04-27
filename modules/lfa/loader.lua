@@ -73,6 +73,8 @@ local quat_math = require "util/math/quat_math"
 local structure_parser = require "lfa/structure_parser"
 local analyzer = require "lfa/analyzer"
 
+local place_default_bones_transforms = require "util/place_default_bones_transforms"
+
 local function getControlQuat(keys, index, loop)
     local k_curr = keys[index]
 
@@ -393,6 +395,8 @@ local function loadFromTable(lfaTable)
 
         keys[index][4] = plainFields
     end
+
+    place_default_bones_transforms(clips, bonesIndices)
 
     return
     {
