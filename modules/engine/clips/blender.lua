@@ -119,7 +119,7 @@ function M:blend_transforms(mode, blendingTransforms, factors, canApplyBlendChec
                 transform[boneId] = boneTransform
             end
 
-            if canApplyBlendCheck and canApplyBlendCheck(i, boneId) then
+            if not canApplyBlendCheck or canApplyBlendCheck(i, boneId) then
                 blendFunc(boneTransform, nextBoneTransform, factor)
             end
         end
