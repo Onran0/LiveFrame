@@ -273,6 +273,20 @@ local function loadFromTable(lfaTable)
     local interpFieldsIndices = { }
     local bonesIndices = { }
 
+    local eulerOrder = lfaTable.metadata.eulerOrder
+    local relativizeTransforms = lfaTable.metadata.relativizeTransforms
+    local skeleton = table.deep_copy(lfaTable.skeleton)
+
+    for _, value in pairs(skeleton) do
+        if #value.rotation == 3 then
+            value.rotation = eulerToQuat(value.rotation, eulerOrder)
+        else
+            value.rotation = quat_math.normalize(quat_math.from_xyzw(value.rotation))
+        end
+
+        value.invRotation = quat_math.inverse(value.rotation)
+    end
+
     local clips = { }
 
     local function createOrGetInterpFieldsIndices(type)
@@ -346,10 +360,12 @@ local function loadFromTable(lfaTable)
             end
 
             for _, bone in pairs(keyframe.bones) do
-                table.insert_unique(bonesIndices, bone.name)
-                table.insert_unique(affectedBones, table.index(bonesIndices, bone.name))
+                local boneName = bone.name
 
-                local idxInBonesKeys = table.index(bonesIndices, bone.name)
+                table.insert_unique(bonesIndices, boneName)
+                table.insert_unique(affectedBones, table.index(bonesIndices, boneName))
+
+                local idxInBonesKeys = table.index(bonesIndices, boneName)
                 local boneKeys = bonesKeys[idxInBonesKeys]
 
                 if not boneKeys then
@@ -388,7 +404,7 @@ local function loadFromTable(lfaTable)
                     type, fields = getInterpTypeAndFields(transform.interpolation.output)
 
                     table.insert(keys, {
-                        value or transform.value,
+                        value,
                         time,
                         type, fields
                     })
@@ -398,7 +414,12 @@ local function loadFromTable(lfaTable)
 
                 if bonePosition then
                     addInterpTypes(bonePosition)
-                    addToKeys(positionKeys, bonePosition)
+                    addToKeys(
+                            positionKeys, bonePosition,
+                            relativizeTransforms and
+                            vec3.sub(bonePosition.value, skeleton[boneName].position) or
+                            bonePosition.value
+                    )
                 end
 
                 if boneRotation then
@@ -407,9 +428,17 @@ local function loadFromTable(lfaTable)
                     local quatRot
 
                     if #boneRotation.value == 3 then
-                        quatRot = eulerToQuat(boneRotation.value, lfaClip.eulerOrder)
+                        quatRot = eulerToQuat(boneRotation.value, eulerOrder)
                     else
-                        quatRot = quat_math.from_xyzw(boneRotation.value)
+                        quatRot = quat_math.normalize(quat_math.from_xyzw(boneRotation.value))
+                    end
+
+                    if relativizeTransforms then
+                        if quat_math.dot(quatRot, skeleton[boneName].rotation) < 0 then
+                            quatRot = quat_math.negate(quatRot)
+                        end
+
+                        quatRot = quat_math.mul(quatRot, skeleton[boneName].invRotation)
                     end
 
                     addToKeys(rotationKeys, boneRotation, quatRot)
@@ -417,7 +446,12 @@ local function loadFromTable(lfaTable)
 
                 if boneScale then
                     addInterpTypes(boneScale)
-                    addToKeys(scaleKeys, boneScale)
+                    addToKeys(
+                            scaleKeys, boneScale,
+                            relativizeTransforms and
+                            vec3.div(boneScale.value, skeleton[boneName].scale) or
+                            boneScale.value
+                    )
                 end
             end
         end

@@ -459,8 +459,8 @@
 
 ```
 @interp id "custom-interp" type "squad" {
-    @field name "in-control" value (0,1,0,1)
-    @field name "out-control" value (1,0.32,1,0.8)
+    @field name "in-control" value (0,0.5,0,0.5)
+    @field name "out-control" value (0.25,0.25,0.25,0.25)
 }
 ```
 

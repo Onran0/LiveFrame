@@ -13,6 +13,20 @@ predictable behavior.
 
 output lfaTable structure:
 {
+    metadata = {
+        version = 1.0,
+        eulerOrder = "xyz",
+        relativizeTransforms = true
+    },
+
+    skeleton = {
+        spine = {
+            position = { 0, 0, 0 },
+            rotation = { 0, 0, 0, 1 },
+            scale = { 1, 1, 1 }
+        }
+    },
+
     interps = {
         ["custom"] = {
             id = "custom",
@@ -27,7 +41,6 @@ output lfaTable structure:
     clips = {
         ["main"] = {
             name = "main",
-            eulerOrder = "xyz",
             loop = true,
             duration = 2, -- in seconds
             keyframes = {
@@ -90,8 +103,16 @@ output lfaTable structure:
 }
 ]]--
 
+local CURRENT_VERSION = 1.0
+
+local SUPPORTED_VERSIONS = {
+    CURRENT_VERSION
+}
+
 -- elements types
 
+local METADATA_TYPE = "metadata"
+local SKELETON_TYPE = "skeleton"
 local INTERP_TYPE = "interp"
 local INTERP_FIELD_TYPE = "field"
 local CLIP_TYPE = "clip"
@@ -108,6 +129,14 @@ local SCALE_TYPE = "scale"
 
 -- attributes names
 
+local ATTR_VERSION = "version"
+local ATTR_EULER_ORDER = "euler-order"
+local ATTR_RELATIVIZE_TRANSFORMS = "relativize-transforms"
+
+local ATTR_POSITION = "position"
+local ATTR_ROTATION = "rotation"
+local ATTR_SCALE = "scale"
+
 local ATTR_INTERP = "interp"
 local ATTR_IN_INTERP = "in-interp"
 local ATTR_OUT_INTERP = "out-interp"
@@ -122,8 +151,6 @@ local ATTR_VALUE = "value"
 
 local ATTR_LOOP = "loop"
 local ATTR_DURATION = "duration"
-
-local ATTR_EULER_ORDER = "euler-order"
 
 local ATTR_ID = "id"
 local ATTR_TYPE = "type"
@@ -158,6 +185,8 @@ local SQUAD_OUT_CONTROL = "out-control"
 -- elements types array
 
 local types = {
+    METADATA_TYPE,
+    SKELETON_TYPE,
     INTERP_TYPE,
     INTERP_FIELD_TYPE,
     CLIP_TYPE,
@@ -185,9 +214,10 @@ local interpTypes = {
 
 --
 
-local possibleElementsInRoot = { CLIP_TYPE, INTERP_TYPE }
+local possibleElementsInRoot = { METADATA_TYPE, SKELETON_TYPE, CLIP_TYPE, INTERP_TYPE }
 
 local possibleChildrenTypes = {
+    [SKELETON_TYPE] = { BONE_TYPE },
     [INTERP_TYPE] = { INTERP_FIELD_TYPE },
     [CLIP_TYPE] = { KEYFRAME_TYPE },
     [KEYFRAME_TYPE] = { SCOPE_TYPE, BONE_TYPE, EVENT_TYPE },
@@ -196,6 +226,12 @@ local possibleChildrenTypes = {
 }
 
 local possibleAttributes = {
+    [METADATA_TYPE] = {
+        [ATTR_VERSION] = VALUE_TYPE_NUMBER,
+        [ATTR_EULER_ORDER] = VALUE_TYPE_STRING,
+        [ATTR_RELATIVIZE_TRANSFORMS] = VALUE_TYPE_BOOLEAN
+    },
+    [SKELETON_TYPE] = { },
     [INTERP_TYPE] = {
         [ATTR_ID] = VALUE_TYPE_STRING,
         [ATTR_TYPE] = VALUE_TYPE_STRING
@@ -210,7 +246,6 @@ local possibleAttributes = {
     },
     [CLIP_TYPE] = {
         [ATTR_NAME] = VALUE_TYPE_STRING,
-        [ATTR_EULER_ORDER] = VALUE_TYPE_STRING,
         [ATTR_LOOP] = VALUE_TYPE_BOOLEAN,
         [ATTR_DURATION] = VALUE_TYPE_NUMBER
     },
@@ -227,6 +262,13 @@ local possibleAttributes = {
     },
     [BONE_TYPE] = {
         [ATTR_NAME] = VALUE_TYPE_STRING,
+
+        -- in skeleton
+        [ATTR_POSITION] = VALUE_TYPE_VEC3,
+        [ATTR_ROTATION] = { VALUE_TYPE_VEC3, VALUE_TYPE_QUAT },
+        [ATTR_SCALE] = VALUE_TYPE_VEC3,
+
+        -- in keyframes
         [ATTR_INTERP] = VALUE_TYPE_STRING,
         [ATTR_IN_INTERP] = VALUE_TYPE_STRING,
         [ATTR_OUT_INTERP] = VALUE_TYPE_STRING,
@@ -265,6 +307,8 @@ local possibleAttributes = {
 }
 
 local requiredAttributes = {
+    [METADATA_TYPE] = { ATTR_VERSION },
+    [SKELETON_TYPE] = { },
     [INTERP_TYPE] = { ATTR_ID, ATTR_TYPE },
     [INTERP_FIELD_TYPE] = { ATTR_NAME, ATTR_VALUE },
     [CLIP_TYPE] = { ATTR_NAME },
@@ -356,6 +400,62 @@ local function validateAndGetValueType(value)
 end
 
 local function analyzeElementSpecial(element, lfaTable)
+    if not lfaTable.metadata then
+        if element.type == METADATA_TYPE then
+            local version = element.attributes[ATTR_VERSION]
+
+            if not table.has(SUPPORTED_VERSIONS, version) then
+                error("LFA files with format version " .. version .. " is not supported by this analyzer")
+            end
+
+            local eulerOrder = element.attributes[ATTR_EULER_ORDER]
+
+            if eulerOrder then
+                local counts = { 0, 0, 0 }
+
+                for i = 1, #eulerOrder do
+                    local char = eulerOrder[i]
+
+                    local ind = ("xyz"):find(char)
+
+                    if not ind then
+                        error('invalid euler-order')
+                    else
+                        counts[ind] = counts[ind] + 1
+                    end
+                end
+
+                for i = 1, #counts do
+                    local count = counts[i]
+
+                    if count == 0 or count > 1 then
+                        error('invalid euler-order')
+                    end
+                end
+            end
+
+            local relativizeTransforms = true
+
+            if element.attributes[ATTR_RELATIVIZE_TRANSFORMS] ~= nil then
+                relativizeTransforms = element.attributes[ATTR_RELATIVIZE_TRANSFORMS]
+            end
+
+            if element.children then
+                error("invalid @metadata structure")
+            end
+
+            lfaTable.metadata = {
+                version = version,
+                eulerOrder = eulerOrder or "xyz",
+                relativizeTransforms = relativizeTransforms
+            }
+        else
+            error("@metadata must be first element in file")
+        end
+    elseif element.type == METADATA_TYPE then
+        error("metadata already declared in file")
+    end
+
     --- interpolation types analyze ---
     if element.type == SCOPE_TYPE or
        element.type == BONE_TYPE or
@@ -373,7 +473,7 @@ local function analyzeElementSpecial(element, lfaTable)
                     if table.has(oppositeTypes, interpAttr) then
                         error(msg)
                     elseif not lfaTable.interps[interpAttr] then
-                        error("unknown interpolation '" .. interpAttr .. "'")
+                        error("unknown interpolation '" .. interpAttr .. "' (maybe custom declared after clip?)")
                     elseif not table.has(defaultTypes, lfaTable.interps[interpAttr].type) then
                         error("custom " .. msg)
                     end
@@ -400,6 +500,10 @@ local function analyzeElementSpecial(element, lfaTable)
 
         if table.has(interpTypes, id) then
             error("custom interp can't have id '" .. id .. "' because it used by default interpolation type")
+        end
+
+        if #lfaTable.clips > 0 then
+            error("custom interps must be declared before clips")
         end
 
         local interpType = element.attributes[ATTR_TYPE]
@@ -492,69 +596,112 @@ local function analyzeElementSpecial(element, lfaTable)
         end
 
         bone[element.type] = transformTable
-    elseif element.type == BONE_TYPE then
-        local clipByElement = lfaTable.temp.clipByElement
-        local keyframeByElement = lfaTable.temp.keyframeByElement
-
-        local clip = lfaTable.temp.clipByElement[element]
-        local keyframe = lfaTable.temp.keyframeByElement[element]
-
-        local name = element.attributes[ATTR_NAME]
-
-        local errorPrefix = "(clip: " .. clip.name ..
-                ", keyframe time: " .. keyframe.time .. ", bone name: " .. name .. ") "
-
-        if keyframe.bones[name] then
-            error(errorPrefix .. "bone with same name already declared in this keyframe")
+    elseif element.type == SKELETON_TYPE then
+        if lfaTable.skeleton then
+            error("skeleton already declared in file")
         end
 
-        keyframe.bones[name] = {
-            name = name
-        }
+        if not element.children or #element.children == 0 then
+            error("skeleton must have at least one bone")
+        end
 
-        local parentScope = lfaTable.temp.scopeByBone[element] or { }
+        lfaTable.skeleton = { }
+    elseif element.type == BONE_TYPE then
+        local parentIsSkeleton = element.parent.type == SKELETON_TYPE
 
         local attrs = element.attributes
+        local name = element.attributes[ATTR_NAME]
 
-        local boneTempTable = {
-            name = name,
+        if parentIsSkeleton then
+            local errorPrefix = "(bone '" .. name .. "' in skeleton) "
 
-            in_interp = attrs[ATTR_IN_INTERP] or attrs[ATTR_INTERP] or parentScope.in_interp,
-            out_interp = attrs[ATTR_OUT_INTERP] or attrs[ATTR_INTERP] or parentScope.out_interp,
-
-            in_rotation_interp = attrs[ATTR_IN_ROTATION_INTERP] or attrs[ATTR_ROTATION_INTERP]
-                                                                or parentScope.in_rotation_interp,
-
-            out_rotation_interp = attrs[ATTR_OUT_ROTATION_INTERP] or attrs[ATTR_ROTATION_INTERP]
-                                                                  or parentScope.out_rotation_interp,
-        }
-
-        local boneByTransform = { }
-
-        local hasTransform = { }
-
-        for i = 1, #element.children do
-            local child = element.children[i]
-
-            if hasTransform[child.type] then
-                error(errorPrefix .. child.type .. " already declared in this bone")
-            else
-                hasTransform[child.type] = true
+            for i = 1, #allInterpAttributes do
+                if attrs[allInterpAttributes[i]] then
+                    error(errorPrefix .. "bone in skeleton can't have interpolation attributes")
+                end
             end
 
-            boneByTransform[child] = boneTempTable
-            keyframeByElement[child] = keyframe
-            clipByElement[child] = clip
-        end
+            if element.children then
+                error(errorPrefix .. "bone in skeleton can't have children")
+            end
 
-        if table.count_pairs(hasTransform) == 0 then
-            error(errorPrefix .. " bone can't be declared without any transforms (position, rotation or scale)")
-        end
+            if lfaTable.skeleton[name] then
+                error(errorPrefix .. "bone with name '" .. name .. "' already declared in skeleton")
+            end
 
-        lfaTable.temp.boneByTransform = table.merge(
-                lfaTable.temp.boneByTransform or {},
-                boneByTransform
-        )
+            lfaTable.skeleton[name] = {
+                position = attrs[ATTR_POSITION] or { 0, 0, 0 },
+                rotation = attrs[ATTR_ROTATION] or { 0, 0, 0, 1 },
+                scale = attrs[ATTR_SCALE] or { 1, 1, 1 }
+            }
+        else
+            local clipByElement = lfaTable.temp.clipByElement
+            local keyframeByElement = lfaTable.temp.keyframeByElement
+
+            local clip = lfaTable.temp.clipByElement[element]
+            local keyframe = lfaTable.temp.keyframeByElement[element]
+
+            local errorPrefix = "(clip: " .. clip.name ..
+                    ", keyframe time: " .. keyframe.time .. ", bone name: '" .. name .. "') "
+
+            if not lfaTable.skeleton[name] then
+                error(errorPrefix .. "bone is not defined in skeleton")
+            end
+
+            if keyframe.bones[name] then
+                error(errorPrefix .. "bone with same name already declared in this keyframe")
+            end
+
+            if attrs[ATTR_POSITION] or attrs[ATTR_ROTATION] or attrs[ATTR_SCALE] then
+                error(errorPrefix .. "bone in keyframe can't have transform attributes")
+            end
+
+            keyframe.bones[name] = {
+                name = name
+            }
+
+            local parentScope = lfaTable.temp.scopeByBone[element] or { }
+
+            local boneTempTable = {
+                name = name,
+
+                in_interp = attrs[ATTR_IN_INTERP] or attrs[ATTR_INTERP] or parentScope.in_interp,
+                out_interp = attrs[ATTR_OUT_INTERP] or attrs[ATTR_INTERP] or parentScope.out_interp,
+
+                in_rotation_interp = attrs[ATTR_IN_ROTATION_INTERP] or attrs[ATTR_ROTATION_INTERP]
+                        or parentScope.in_rotation_interp,
+
+                out_rotation_interp = attrs[ATTR_OUT_ROTATION_INTERP] or attrs[ATTR_ROTATION_INTERP]
+                        or parentScope.out_rotation_interp,
+            }
+
+            local boneByTransform = { }
+
+            local hasTransform = { }
+
+            for i = 1, #element.children do
+                local child = element.children[i]
+
+                if hasTransform[child.type] then
+                    error(errorPrefix .. child.type .. " already declared in this bone")
+                else
+                    hasTransform[child.type] = true
+                end
+
+                boneByTransform[child] = boneTempTable
+                keyframeByElement[child] = keyframe
+                clipByElement[child] = clip
+            end
+
+            if table.count_pairs(hasTransform) == 0 then
+                error(errorPrefix .. " bone can't be declared without any transforms (position, rotation or scale)")
+            end
+
+            lfaTable.temp.boneByTransform = table.merge(
+                    lfaTable.temp.boneByTransform or {},
+                    boneByTransform
+            )
+        end
     elseif element.type == SCOPE_TYPE then
         local clipByElement = lfaTable.temp.clipByElement
         local keyframeByElement = lfaTable.temp.keyframeByElement
@@ -663,30 +810,8 @@ local function analyzeElementSpecial(element, lfaTable)
 
         local errorPrefix = "(clip: " .. name .. ") "
 
-        local eulerOrder = element.attributes[ATTR_EULER_ORDER]
-
-        if element.attributes[ATTR_EULER_ORDER] then
-            local counts = { 0, 0, 0 }
-
-            for i = 1, #eulerOrder do
-                local char = eulerOrder[i]
-
-                local ind = ("xyz"):find(char)
-
-                if not ind then
-                    error(errorPrefix .. 'invalid euler-order')
-                else
-                    counts[ind] = counts[ind] + 1
-                end
-            end
-
-            for i = 1, #counts do
-                local count = counts[i]
-
-                if count == 0 or count > 1 then
-                    error(errorPrefix .. 'invalid euler-order')
-                end
-            end
+        if not lfaTable.skeleton then
+            error("clips must be declared after skeleton")
         end
 
         local loop
@@ -699,7 +824,6 @@ local function analyzeElementSpecial(element, lfaTable)
 
         local clipTable = {
             name = name,
-            eulerOrder = eulerOrder or 'xyz',
             loop = loop,
             keyframes = { }
         }
@@ -826,31 +950,13 @@ end
 
 function M.analyze(structureTable)
     local lfaTable = {
-        clips = { },
         interps = { },
+        clips = { },
         temp = { }
     }
 
-    local sortedStructureTable = { }
-
     for i = 1, #structureTable do
-        local e = structureTable[i]
-
-        if e.type == INTERP_TYPE then
-            table.insert(sortedStructureTable, e)
-        end
-    end
-
-    for i = 1, #structureTable do
-        local e = structureTable[i]
-
-        if e.type == CLIP_TYPE then
-            table.insert(sortedStructureTable, e)
-        end
-    end
-
-    for i = 1, #sortedStructureTable do
-        local element = sortedStructureTable[i]
+        local element = structureTable[i]
 
         if not table.has(possibleElementsInRoot, element.type) then
             error("elements with type '" .. element.type .. "' can't be declared in the root")
@@ -858,6 +964,14 @@ function M.analyze(structureTable)
             analyzeElementGeneral(element)
             analyzeElementSpecial(element, lfaTable)
         end
+    end
+
+    if not lfaTable.metadata then
+        error("metadata is missing")
+    end
+
+    if not lfaTable.skeleton then
+        error("skeleton is missing")
     end
 
     lfaTable.temp = nil
