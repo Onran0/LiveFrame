@@ -106,6 +106,10 @@ output table format:
 }
 ]]--
 
+local KEY_TYPE_POSITION = 0
+local KEY_TYPE_ROTATION = 1
+local KEY_TYPE_SCALE = 2
+
 local quat_math = require "util/math/quat_math"
 
 local structure_parser = require "lfa/structure_parser"
@@ -113,7 +117,7 @@ local analyzer = require "lfa/analyzer"
 
 local place_default_bones_transforms = require "util/place_default_bones_transforms"
 
-local function getControlQuat(keys, index, loop)
+local function getControlQuat(keys, index, duration, loop)
     local k_curr = keys[index]
 
     if not k_curr then return quat_math.idt() end
@@ -121,21 +125,38 @@ local function getControlQuat(keys, index, loop)
     local k_prev = keys[index - 1]
     local k_next = keys[index + 1]
 
+    local t_curr = k_curr[2]
+    local t_prev, t_next
+
     if not k_prev then
         if loop then
             k_prev = keys[#keys]
+            t_prev = t_curr - (duration - k_prev[2])
         else
             k_prev = k_curr
+            t_prev = t_curr
         end
+    else
+        t_prev = k_prev[2]
     end
 
     if not k_next then
         if loop then
             k_next = keys[1]
+            t_next = t_curr + (duration - t_curr + k_next[2])
         else
             k_next = k_curr
+            t_next = t_curr
         end
+    else
+        t_next = k_next[2]
     end
+
+    local dt1 = t_curr - t_prev
+    local dt2 = t_next - t_curr
+
+    if dt1 <= 0 then dt1 = 1.0 end
+    if dt2 <= 0 then dt2 = 1.0 end
 
     local q_curr = k_curr[1]
     local q_prev = k_prev[1]
@@ -146,25 +167,29 @@ local function getControlQuat(keys, index, loop)
 
     local q_inv = quat_math.inverse(q_curr)
 
+    local log_prev = quat_math.log(
+            quat_math.mul(
+                    q_inv,
+                    q_prev
+            )
+    )
+
+    local log_next = quat_math.log(
+            quat_math.mul(
+                    q_inv,
+                    q_next
+            )
+    )
+
+    local w_prev = -dt2 / (2 * (dt1 + dt2))
+    local w_next = -dt1 / (2 * (dt1 + dt2))
+
     return quat_math.mul(
             q_curr,
             quat_math.exp(
-                    quat_math.scale(
-                            quat_math.add(
-                                    quat_math.log(
-                                            quat_math.mul(
-                                                    q_inv,
-                                                    q_prev
-                                            )
-                                    ),
-                                    quat_math.log(
-                                            quat_math.mul(
-                                                    q_inv,
-                                                    q_next
-                                            )
-                                    )
-                            ),
-                            -0.25
+                    quat_math.add(
+                            quat_math.scale(log_prev, w_prev),
+                            quat_math.scale(log_next, w_next)
                     )
 
             )
@@ -172,7 +197,7 @@ local function getControlQuat(keys, index, loop)
 end
 
 local autoComputeInterpsTypes = {
-    ["cubic-spline"] = function(keys, index, duration, loop)
+    [analyzer.interpCubicSpline] = function(keys, index, duration, loop)
         local k_prev = keys[index - 1]
         local k_curr = keys[index]
         local k_next = keys[index + 1]
@@ -241,7 +266,7 @@ local autoComputeInterpsTypes = {
         }
     end,
 
-    ["squad"] = function(keys, index, _, loop)
+    [analyzer.interpSquad] = function(keys, index, duration, loop)
         local nextInd = index + 1
 
         if loop and not keys[nextInd] then
@@ -249,8 +274,8 @@ local autoComputeInterpsTypes = {
         end
 
         return {
-            ["in-control"] = getControlQuat(keys, index, loop),
-            ["out-control"] = getControlQuat(keys, nextInd, loop)
+            ["in-control"] = getControlQuat(keys, index, duration, loop),
+            ["out-control"] = getControlQuat(keys, nextInd, duration, loop)
         }
     end
 }
@@ -317,7 +342,10 @@ local function loadFromTable(lfaTable)
     end
 
     local function getInterpTypeAndFields(
-            rawType -- possibly a custom interp id, as well as a default interp type
+            rawType, -- possibly a custom interp id, as well as a default interp type
+            base, -- base for fields relativization (for rotation is inverted for higher load speed)
+            keyVal, -- value of key (may relativized),
+            keyType
     )
         if not table.has(analyzer.allDefaultInterpTypes, rawType) then
             local customId = rawType
@@ -326,7 +354,24 @@ local function loadFromTable(lfaTable)
             local fieldsIndices = createOrGetInterpFieldsIndices(type)
 
             local plainFields = { }
+
             for name, value in pairs(lfaTable.interps[customId].fields) do
+                if type == analyzer.interpSquad then
+                    value = quat_math.normalize(quat_math.from_xyzw(value))
+                end
+
+                if relativizeTransforms then
+                    if type == analyzer.interpSquad then
+                        value = quat_math.mul(base, value)
+
+                        if quat_math.dot(value, keyVal) < 0 then
+                            value = quat_math.negate(value)
+                        end
+                    elseif type == analyzer.interpCubicSpline and keyType == KEY_TYPE_SCALE then
+                        value = vec3.div(value, base)
+                    end
+                end
+
                 plainFields[table.index(fieldsIndices, name)] = value
             end
 
@@ -398,19 +443,19 @@ local function loadFromTable(lfaTable)
                     end
                 end
 
-                local function addToKeys(keys, transform, value)
+                local function addToKeys(keys, transform, value, base, keyType)
                     local type, fields
 
                     if transform.interpolation.input and #keys > 0 then
-                        type, fields = getInterpTypeAndFields(transform.interpolation.input)
+                        type, fields = getInterpTypeAndFields(transform.interpolation.input, base, value, keyType)
 
                         keys[#keys][3] = type
                         keys[#keys][4] = fields
 
-                        tryAddToAutoComputeList(keys, type, lfaClip.loop, fields)
+                        tryAddToAutoComputeList(keys, type, lfaClip.loop, lfaClip.duration, fields)
                     end
 
-                    type, fields = getInterpTypeAndFields(transform.interpolation.output)
+                    type, fields = getInterpTypeAndFields(transform.interpolation.output, base, value, keyType)
 
                     table.insert(keys, {
                         value,
@@ -418,7 +463,7 @@ local function loadFromTable(lfaTable)
                         type, fields
                     })
 
-                    tryAddToAutoComputeList(keys, type, lfaClip.loop, fields)
+                    tryAddToAutoComputeList(keys, type, lfaClip.loop, lfaClip.duration, fields)
                 end
 
                 if bonePosition then
@@ -427,7 +472,9 @@ local function loadFromTable(lfaTable)
                             positionKeys, bonePosition,
                             relativizeTransforms and
                             vec3.sub(bonePosition.value, skeleton[boneName].position) or
-                            bonePosition.value
+                            bonePosition.value,
+                            skeleton[boneName].position,
+                            KEY_TYPE_POSITION
                     )
                 end
 
@@ -450,7 +497,7 @@ local function loadFromTable(lfaTable)
                         quatRot = quat_math.mul(skeleton[boneName].invRotation, quatRot)
                     end
 
-                    addToKeys(rotationKeys, boneRotation, quatRot)
+                    addToKeys(rotationKeys, boneRotation, quatRot, skeleton[boneName].invRotation, KEY_TYPE_ROTATION)
 
                     local len = #rotationKeys
 
@@ -467,7 +514,9 @@ local function loadFromTable(lfaTable)
                             scaleKeys, boneScale,
                             relativizeTransforms and
                             vec3.div(boneScale.value, skeleton[boneName].scale) or
-                            boneScale.value
+                            boneScale.value,
+                            skeleton[boneName].scale,
+                            KEY_TYPE_SCALE
                     )
                 end
             end

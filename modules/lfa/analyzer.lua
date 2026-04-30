@@ -370,7 +370,10 @@ local M = {
     defaultTransformInterpTypes = defaultInterpTypes,
     defaultRotationInterpTypes = defaultRotationInterpTypes,
 
-    requiredCustomizableInterpTypesFields = requiredCustomizableInterpTypesFields
+    requiredCustomizableInterpTypesFields = requiredCustomizableInterpTypesFields,
+
+    interpCubicSpline = INTERP_CUBIC_SPLINE,
+    interpSquad = INTERP_SQUAD
 }
 
 local function validateAndGetValueType(value)
