@@ -93,11 +93,6 @@ function M:get_bone_transform_sample(boneIndex, currentTime, clipIndex, returnTa
 
     local looped, duration = clip.loop, clip.duration
 
-    -- converting bone name to bone index
-    if type(boneIndex) == "string" then
-        boneIndex = table.index(clip.bonesKeys, boneIndex)
-    end
-
     local transform = { } -- 1 - translate (vec3), 2 - rotation (quat), 3 - scale (vec3)
 
     local boneKeys = clip.bonesKeys[boneIndex]
