@@ -4,13 +4,61 @@ local place_default_bones_transforms = require "util/place_default_bones_transfo
 
 local M = { }
 
+local tablesEquals
+
+local function directTablesEquals(a, b)
+    for name, value in pairs(a) do
+        local bValue = b[name]
+
+        if not bValue then
+            return false
+        end
+
+        local t = type(bValue)
+
+        if t ~= type(value) then
+            return false
+        elseif t == "table" then
+            if not tablesEquals(value, bValue) then
+                return false
+            end
+        elseif value ~= bValue then return false end
+    end
+
+    return true
+end
+
+tablesEquals = function(a, b)
+    if not directTablesEquals(a, b) then return false end
+    if not directTablesEquals(b, a) then return false end
+
+    return true
+end
+
 function M.combine(clipsMetadataArray, overrideClipsNames)
     local combinedInterpTypesIndices = { }
     local combinedInterpFieldsIndices = { }
     local combinedBonesIndices = { }
     local combinedClips = { }
 
+    local relativizedTransforms
+    local skeleton
+
     for clipsMetadataIndex, clipsMetadata in ipairs(clipsMetadataArray) do
+        if skeleton then
+            local prefMsg = "incompatible metadata's: "
+            local postMsg = " in " .. clipsMetadataIndex .. "th clip metadata"
+
+            if not tablesEquals(skeleton, clipsMetadata.metadata.skeleton) then
+                error(prefMsg .. "different skeleton" .. postMsg)
+            elseif relativizedTransforms ~= clipsMetadata.metadata.relativizedTransforms then
+                error(prefMsg .. "different relativization" .. postMsg)
+            end
+        else
+            relativizedTransforms = clipsMetadata.metadata.relativizedTransforms
+            skeleton = clipsMetadata.metadata.skeleton
+        end
+
         local fromLocalInterpTypesIndicesToCombined = { }
         local fromLocalInterpFieldsIndicesToCombined = { }
         local fromLocalBoneIndexToCombined = { }
@@ -138,9 +186,13 @@ function M.combine(clipsMetadataArray, overrideClipsNames)
         end
     end
 
-    place_default_bones_transforms(combinedClips, combinedBonesIndices)
+    place_default_bones_transforms(combinedClips, combinedBonesIndices, relativizedTransforms, skeleton)
 
     return {
+        metadata = {
+            relativizedTransforms = relativizedTransforms,
+            skeleton = skeleton
+        },
         interpTypesIndices = combinedInterpTypesIndices,
         interpFieldsIndices = combinedInterpFieldsIndices,
         bonesIndices = combinedBonesIndices,

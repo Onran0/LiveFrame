@@ -2,6 +2,22 @@
 
 output table format:
 {
+    metadata = {
+        relativizedTransforms = true,
+        skeleton = {
+            spine = {
+                position = { 0, 0, 0 },
+                rotation = { 1, 0, 0, 0 },
+                scale = { 1, 1, 1 }
+            },
+            head = {
+                position = { 0, 0, 0 },
+                rotation = { 1, 0, 0, 0 },
+                scale = { 1, 1, 1 }
+            }
+        }
+    },
+
     -- indices for interpolation types
     interpTypesIndices = {
         lerp,
@@ -556,10 +572,14 @@ local function loadFromTable(lfaTable)
         keys[index][constants.KEY_INTERP_FIELDS_INDEX] = plainFields
     end
 
-    place_default_bones_transforms(clips, bonesIndices)
+    place_default_bones_transforms(clips, bonesIndices, relativizeTransforms, lfaTable.skeleton)
 
     return
     {
+        metadata = {
+            relativizedTransforms = lfaTable.metadata.relativizeTransforms,
+            skeleton = lfaTable.skeleton
+        },
         interpTypesIndices = interpTypesIndices,
         interpFieldsIndices = interpFieldsIndices,
         bonesIndices = bonesIndices,
