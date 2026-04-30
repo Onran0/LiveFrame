@@ -86,7 +86,7 @@ function M.combine(clipsMetadataArray, overrideClipsNames)
             end
 
             -- converting interpolation type and fields indices from local metadata space to combined
-            for localBoneIndex, transformsKeys in pairs(clip.bonesKeys) do
+            for localBoneIndex, transformsKeys in ipairs(clip.bonesKeys) do
                 local combinedBoneKeys = { }
 
                 for i = 1, 3 do

@@ -167,15 +167,13 @@ function M:get_bone_transform_sample(boneIndex, currentTime, clipIndex, returnTa
     end
 end
 
-function M:get_transforms_sample(currentTime, clipIndex, useIndicesInsteadNames)
+function M:get_transforms_sample(currentTime, clipIndex)
     local clip = self.clipsMetadata.clips[clipIndex]
 
     local transforms = { }
 
-    for index, _ in pairs(clip.bonesKeys) do
-        transforms[
-        useIndicesInsteadNames and index or self.clipsMetadata.bonesIndices[index]
-        ] = self:get_bone_transform_sample(index, currentTime, clipIndex, true)
+    for index, _ in ipairs(clip.bonesKeys) do
+        transforms[index] = self:get_bone_transform_sample(index, currentTime, clipIndex, true)
     end
 
     return transforms

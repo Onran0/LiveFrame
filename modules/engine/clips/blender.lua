@@ -115,7 +115,7 @@ function M:blend_transforms(mode, blendingTransforms, factors, canApplyBlendChec
     for i = 1, #blendingTransforms do
         local factor = factors[i]
 
-        for boneId, nextBoneTransform in pairs(blendingTransforms[i]) do
+        for boneId, nextBoneTransform in ipairs(blendingTransforms[i]) do
             local boneTransform = transform[boneId]
 
             if not boneTransform then
@@ -130,7 +130,7 @@ function M:blend_transforms(mode, blendingTransforms, factors, canApplyBlendChec
     end
 
     if mode == BLEND_MODE_AVERAGE then
-        for _, boneTransform in pairs(transform) do
+        for _, boneTransform in ipairs(transform) do
             if boneTransform[rotIndex] then
                 boneTransform[rotIndex] = quat_math.normalize(boneTransform[rotIndex])
             end
@@ -140,14 +140,11 @@ function M:blend_transforms(mode, blendingTransforms, factors, canApplyBlendChec
     return transform
 end
 
-function M:calculate_samples_and_blend(times, blendingClipsIndices, factors, useIndicesInsteadNames)
+function M:calculate_samples_and_blend(times, blendingClipsIndices, factors)
     local clipsTransforms = { }
 
     for i = 1, #blendingClipsIndices do
-        clipsTransforms[i] = self.sampler:get_transforms_sample(
-                times[i], blendingClipsIndices[i],
-                useIndicesInsteadNames
-        )
+        clipsTransforms[i] = self.sampler:get_transforms_sample(times[i], blendingClipsIndices[i])
     end
 
     return self:blend_transforms(BLEND_MODE_AVERAGE, clipsTransforms, factors)

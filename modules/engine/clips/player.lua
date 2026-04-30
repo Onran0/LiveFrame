@@ -136,7 +136,7 @@ function M:step(delta)
 
     self:__check_events(prevTime, time)
 
-    for index, transform in ipairs(self.sampler:get_transforms_sample(time, self.playingClip, true)) do
+    for index, transform in ipairs(self.sampler:get_transforms_sample(time, self.playingClip)) do
         self.skeleton:set_matrix(
                 self.boneIndexToRigIndex[index],
                 math_util.compose_matrix_from_transform(transform)

@@ -225,7 +225,7 @@ function M:step(delta)
         )
     end
 
-    for index, transform in pairs(pose) do
+    for index, transform in ipairs(pose) do
         self.skeleton:set_matrix(
                 self.boneIndexToRigIndex[index],
                 math_util.compose_matrix_from_transform(transform)
