@@ -1,3 +1,5 @@
+local constants = require "general_constants"
+
 local place_default_bones_transforms = require "util/place_default_bones_transforms"
 
 local M = { }
@@ -92,16 +94,16 @@ function M.combine(clipsMetadataArray, overrideClipsNames)
 
                     if transformsKeys[i] and #transformsKeys[i] > 0 then
                         for _, key in ipairs(transformsKeys[i]) do
-                            local localInterpTypeIndex = key[3]
+                            local localInterpTypeIndex = key[constants.KEY_INTERP_TYPE_INDEX]
 
                             local combinedKey = table.copy(key)
 
                             if localInterpTypeIndex then
-                                combinedKey[3] = fromLocalInterpTypesIndicesToCombined[localInterpTypeIndex]
+                                combinedKey[constants.KEY_INTERP_TYPE_INDEX] = fromLocalInterpTypesIndicesToCombined[localInterpTypeIndex]
                             end
 
-                            if combinedKey[4] then
-                                local localFieldsValues = combinedKey[4]
+                            if combinedKey[constants.KEY_INTERP_FIELDS_INDEX] then
+                                local localFieldsValues = combinedKey[constants.KEY_INTERP_FIELDS_INDEX]
                                 local combinedFieldsValues = { }
 
                                 for j = 1, #localFieldsValues do
@@ -110,7 +112,7 @@ function M.combine(clipsMetadataArray, overrideClipsNames)
                                     ] = localFieldsValues[j]
                                 end
 
-                                combinedKey[4] = combinedFieldsValues
+                                combinedKey[constants.KEY_INTERP_FIELDS_INDEX] = combinedFieldsValues
                             end
 
                             table.insert(combinedTransformKeys, combinedKey)

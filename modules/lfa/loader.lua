@@ -106,9 +106,11 @@ output table format:
 }
 ]]--
 
-local KEY_TYPE_POSITION = 0
-local KEY_TYPE_ROTATION = 1
-local KEY_TYPE_SCALE = 2
+local constants = require "general_constants"
+
+local KEY_TYPE_POSITION = 1
+local KEY_TYPE_ROTATION = 2
+local KEY_TYPE_SCALE = 3
 
 local quat_math = require "util/math/quat_math"
 
@@ -125,31 +127,31 @@ local function getControlQuat(keys, index, duration, loop)
     local k_prev = keys[index - 1]
     local k_next = keys[index + 1]
 
-    local t_curr = k_curr[2]
+    local t_curr = k_curr[constants.KEY_TIME_INDEX]
     local t_prev, t_next
 
     if not k_prev then
         if loop then
             k_prev = keys[#keys]
-            t_prev = t_curr - (duration - k_prev[2])
+            t_prev = t_curr - (duration - k_prev[constants.KEY_TIME_INDEX])
         else
             k_prev = k_curr
             t_prev = t_curr
         end
     else
-        t_prev = k_prev[2]
+        t_prev = k_prev[constants.KEY_TIME_INDEX]
     end
 
     if not k_next then
         if loop then
             k_next = keys[1]
-            t_next = t_curr + (duration - t_curr + k_next[2])
+            t_next = t_curr + (duration - t_curr + k_next[constants.KEY_TIME_INDEX])
         else
             k_next = k_curr
             t_next = t_curr
         end
     else
-        t_next = k_next[2]
+        t_next = k_next[constants.KEY_TIME_INDEX]
     end
 
     local dt1 = t_curr - t_prev
@@ -158,9 +160,9 @@ local function getControlQuat(keys, index, duration, loop)
     if dt1 <= 0 then dt1 = 1.0 end
     if dt2 <= 0 then dt2 = 1.0 end
 
-    local q_curr = k_curr[1]
-    local q_prev = k_prev[1]
-    local q_next = k_next[1]
+    local q_curr = k_curr[constants.KEY_VALUE_INDEX]
+    local q_prev = k_prev[constants.KEY_VALUE_INDEX]
+    local q_next = k_next[constants.KEY_VALUE_INDEX]
 
     if quat_math.dot(q_prev, q_curr) < 0 then q_prev = quat_math.negate(q_prev) end
     if quat_math.dot(q_next, q_curr) < 0 then q_next = quat_math.negate(q_next) end
@@ -206,12 +208,12 @@ local autoComputeInterpsTypes = {
             return { ["in-tangent"] = {0,0,0}, ["out-tangent"] = {0,0,0} }
         end
 
-        local t_curr = k_curr[2]
+        local t_curr = k_curr[constants.KEY_TIME_INDEX]
         local t_prev, t_next
 
         if not k_prev and loop then
             k_prev = keys[#keys]
-            t_prev = t_curr - (duration - k_prev[2])
+            t_prev = t_curr - (duration - k_prev[constants.KEY_TIME_INDEX])
         end
 
         if not k_next and loop then
@@ -219,12 +221,12 @@ local autoComputeInterpsTypes = {
             t_next = duration
         end
 
-        local p_prev = k_prev and k_prev[1]
-        local p_curr = k_curr[1]
-        local p_next = k_next and k_next[1]
+        local p_prev = k_prev and k_prev[constants.KEY_VALUE_INDEX]
+        local p_curr = k_curr[constants.KEY_VALUE_INDEX]
+        local p_next = k_next and k_next[constants.KEY_VALUE_INDEX]
 
-        t_prev = t_prev or (k_prev and k_prev[2])
-        t_next = t_next or (k_next and k_next[2])
+        t_prev = t_prev or (k_prev and k_prev[constants.KEY_TIME_INDEX])
+        t_next = t_next or (k_next and k_next[constants.KEY_TIME_INDEX])
 
         local inTangent  = {0,0,0}
         local outTangent = {0,0,0}
@@ -428,7 +430,9 @@ local function loadFromTable(lfaTable)
                 end
 
                 local bonePosition, boneRotation, boneScale = bone.position, bone.rotation, bone.scale
-                local positionKeys, rotationKeys, scaleKeys = boneKeys[1], boneKeys[2], boneKeys[3]
+                local positionKeys, rotationKeys, scaleKeys = boneKeys[constants.POSITION_KEYS_INDEX],
+                                                              boneKeys[constants.ROTATION_KEYS_INDEX],
+                                                              boneKeys[constants.SCALE_KEYS_INDEX]
 
                 local function addInterpTypes(transform)
                     for _, interpType in ipairs({
@@ -449,8 +453,8 @@ local function loadFromTable(lfaTable)
                     if transform.interpolation.input and #keys > 0 then
                         type, fields = getInterpTypeAndFields(transform.interpolation.input, base, value, keyType)
 
-                        keys[#keys][3] = type
-                        keys[#keys][4] = fields
+                        keys[#keys][constants.KEY_INTERP_TYPE_INDEX] = type
+                        keys[#keys][constants.KEY_INTERP_FIELDS_INDEX] = fields
 
                         tryAddToAutoComputeList(keys, type, lfaClip.loop, lfaClip.duration, fields)
                     end
@@ -502,8 +506,12 @@ local function loadFromTable(lfaTable)
                     local len = #rotationKeys
 
                     if len > 1 then
-                        if quat_math.dot(rotationKeys[len][1], rotationKeys[len-1][1]) < 0 then
-                            rotationKeys[len][1] = quat_math.negate(rotationKeys[len][1])
+                        if quat_math.dot(
+                                rotationKeys[len][constants.KEY_VALUE_INDEX],
+                                rotationKeys[len-1][constants.KEY_VALUE_INDEX]
+                            ) < 0
+                        then
+                            rotationKeys[len][constants.KEY_VALUE_INDEX] = quat_math.negate(rotationKeys[len][constants.KEY_VALUE_INDEX])
                         end
                     end
                 end
@@ -545,7 +553,7 @@ local function loadFromTable(lfaTable)
             plainFields[table.index(createOrGetInterpFieldsIndices(type), name)] = value
         end
 
-        keys[index][4] = plainFields
+        keys[index][constants.KEY_INTERP_FIELDS_INDEX] = plainFields
     end
 
     place_default_bones_transforms(clips, bonesIndices)

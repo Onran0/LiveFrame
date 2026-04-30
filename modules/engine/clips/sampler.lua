@@ -1,3 +1,5 @@
+local constants = require "general_constants"
+
 local interpolation = require "engine/interpolation"
 
 local M = { }
@@ -104,7 +106,7 @@ function M:get_bone_transform_sample(boneIndex, currentTime, clipIndex, returnTa
             local keyFrom, keyTo
 
             for index, key in ipairs(transformKeys) do
-                local keyTime = key[2]
+                local keyTime = key[constants.KEY_TIME_INDEX]
 
                 if keyTime > currentTime then
                     keyTo = key
@@ -114,9 +116,9 @@ function M:get_bone_transform_sample(boneIndex, currentTime, clipIndex, returnTa
             end
 
             if not keyTo and not looped then
-                transform[i] = transformKeys[#transformKeys][1]
+                transform[i] = transformKeys[#transformKeys][constants.KEY_VALUE_INDEX]
             elseif not keyFrom and not looped then
-                transform[i] = keyTo[1]
+                transform[i] = keyTo[constants.KEY_VALUE_INDEX]
             else
                 local keyToTime
 
@@ -129,9 +131,9 @@ function M:get_bone_transform_sample(boneIndex, currentTime, clipIndex, returnTa
                     keyFrom = transformKeys[#transformKeys]
                 end
 
-                local keyFromTime = keyFrom[2]
-                keyToTime = keyToTime or keyTo[2]
-                local interpTypeIndex = keyFrom[3]
+                local keyFromTime = keyFrom[constants.KEY_TIME_INDEX]
+                keyToTime = keyToTime or keyTo[constants.KEY_TIME_INDEX]
+                local interpTypeIndex = keyFrom[constants.KEY_INTERP_TYPE_INDEX]
 
                 local factor = (currentTime - keyFromTime) / (keyToTime - keyFromTime)
 
@@ -141,11 +143,16 @@ function M:get_bone_transform_sample(boneIndex, currentTime, clipIndex, returnTa
 
                 if self.fromLocalInterpFieldsIndexToGlobal[interpTypeIndex] then
                     value = interpFunc(
-                            keyFrom[1], keyTo[1], factor,
-                            self:__map_interp_fields(interpTypeIndex, keyFrom[4])
+                            keyFrom[constants.KEY_VALUE_INDEX], keyTo[constants.KEY_VALUE_INDEX], factor,
+                            self:__map_interp_fields(
+                                    interpTypeIndex, keyFrom[constants.KEY_INTERP_FIELDS_INDEX]
+                            )
                     )
                 else
-                    value = interpFunc(keyFrom[1], keyTo[1], factor)
+                    value = interpFunc(
+                            keyFrom[constants.KEY_VALUE_INDEX], keyTo[constants.KEY_VALUE_INDEX],
+                            factor
+                    )
                 end
 
                 transform[i] = value

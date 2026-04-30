@@ -1,3 +1,7 @@
+local constants = require "general_constants"
+
+local posIndex, rotIndex, sclIndex = constants.POSITION_INDEX, constants.ROTATION_INDEX, constants.SCALE_INDEX
+
 local quat_math = require "util/math/quat_math"
 
 local BLEND_MODE_AVERAGE = 0
@@ -23,82 +27,82 @@ function M:set_sampler(sampler)
 end
 
 local function blendAverage(prevBoneTransform, nextBoneTransform, factor)
-    if nextBoneTransform[1] then
-        if prevBoneTransform[1] then
-            prevBoneTransform[1] = vec3.add(
-                    prevBoneTransform[1],
-                    vec3.mul(nextBoneTransform[1], factor)
+    if nextBoneTransform[posIndex] then
+        if prevBoneTransform[posIndex] then
+            prevBoneTransform[posIndex] = vec3.add(
+                    prevBoneTransform[posIndex],
+                    vec3.mul(nextBoneTransform[posIndex], factor)
             )
         else
-            prevBoneTransform[1] = vec3.mul(nextBoneTransform[1], factor)
+            prevBoneTransform[posIndex] = vec3.mul(nextBoneTransform[posIndex], factor)
         end
     end
 
-    if nextBoneTransform[2] then
-        if prevBoneTransform[2] then
-            local accumulated = prevBoneTransform[2]
-            local next = nextBoneTransform[2]
+    if nextBoneTransform[rotIndex] then
+        if prevBoneTransform[rotIndex] then
+            local accumulated = prevBoneTransform[rotIndex]
+            local next = nextBoneTransform[rotIndex]
             local factorMul = 1
 
             if quat_math.dot(accumulated, next) < 0 then
                 factorMul = -1
             end
 
-            prevBoneTransform[2] = quat_math.add(
+            prevBoneTransform[rotIndex] = quat_math.add(
                     accumulated,
                     quat_math.mul(next, factor * factorMul)
             )
         else
-            prevBoneTransform[2] = quat_math.mul(nextBoneTransform[2], factor)
+            prevBoneTransform[rotIndex] = quat_math.mul(nextBoneTransform[rotIndex], factor)
         end
     end
 
-    if nextBoneTransform[3] then
-        if prevBoneTransform[3] then
-            prevBoneTransform[3] = vec3.add(
-                    prevBoneTransform[3],
-                    vec3.mul(nextBoneTransform[3], factor)
+    if nextBoneTransform[sclIndex] then
+        if prevBoneTransform[sclIndex] then
+            prevBoneTransform[sclIndex] = vec3.add(
+                    prevBoneTransform[sclIndex],
+                    vec3.mul(nextBoneTransform[sclIndex], factor)
             )
         else
-            prevBoneTransform[3] = vec3.mul(nextBoneTransform[3], factor)
+            prevBoneTransform[sclIndex] = vec3.mul(nextBoneTransform[sclIndex], factor)
         end
     end
 end
 
 local function blendLayer(prevBoneTransform, nextBoneTransform, weight)
-    if nextBoneTransform[1] then
-        if prevBoneTransform[1] then
-            prevBoneTransform[1] = vec3.mix(
-                    prevBoneTransform[1],
-                    nextBoneTransform[1],
+    if nextBoneTransform[posIndex] then
+        if prevBoneTransform[posIndex] then
+            prevBoneTransform[posIndex] = vec3.mix(
+                    prevBoneTransform[posIndex],
+                    nextBoneTransform[posIndex],
                     weight
             )
         else
-            prevBoneTransform[1] = nextBoneTransform[1]
+            prevBoneTransform[posIndex] = nextBoneTransform[posIndex]
         end
     end
 
-    if nextBoneTransform[2] then
-        if prevBoneTransform[2] then
-            prevBoneTransform[2] = quat.slerp(
-                    prevBoneTransform[2],
-                    nextBoneTransform[2],
+    if nextBoneTransform[rotIndex] then
+        if prevBoneTransform[rotIndex] then
+            prevBoneTransform[rotIndex] = quat.slerp(
+                    prevBoneTransform[rotIndex],
+                    nextBoneTransform[rotIndex],
                     weight
             )
         else
-            prevBoneTransform[2] = nextBoneTransform[2]
+            prevBoneTransform[rotIndex] = nextBoneTransform[rotIndex]
         end
     end
 
-    if nextBoneTransform[3] then
-        if prevBoneTransform[3] then
-            prevBoneTransform[3] = vec3.mix(
-                    prevBoneTransform[3],
-                    nextBoneTransform[3],
+    if nextBoneTransform[sclIndex] then
+        if prevBoneTransform[sclIndex] then
+            prevBoneTransform[sclIndex] = vec3.mix(
+                    prevBoneTransform[sclIndex],
+                    nextBoneTransform[sclIndex],
                     weight
             )
         else
-            prevBoneTransform[3] = nextBoneTransform[3]
+            prevBoneTransform[sclIndex] = nextBoneTransform[sclIndex]
         end
     end
 end
@@ -127,8 +131,8 @@ function M:blend_transforms(mode, blendingTransforms, factors, canApplyBlendChec
 
     if mode == BLEND_MODE_AVERAGE then
         for _, boneTransform in pairs(transform) do
-            if boneTransform[2] then
-                boneTransform[2] = quat_math.normalize(boneTransform[2])
+            if boneTransform[rotIndex] then
+                boneTransform[rotIndex] = quat_math.normalize(boneTransform[rotIndex])
             end
         end
     end
