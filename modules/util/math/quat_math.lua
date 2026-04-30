@@ -13,7 +13,7 @@ function M.dot(a, b)
 end
 
 function M.inverse(q)
-    local len = M.length(q)
+    local len = M.length_sqr(q)
 
     if len > 0 then
         return {

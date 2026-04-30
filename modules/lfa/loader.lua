@@ -141,6 +141,9 @@ local function getControlQuat(keys, index, loop)
     local q_prev = k_prev[1]
     local q_next = k_next[1]
 
+    if quat_math.dot(q_prev, q_curr) < 0 then q_prev = quat_math.negate(q_prev) end
+    if quat_math.dot(q_next, q_curr) < 0 then q_next = quat_math.negate(q_next) end
+
     local q_inv = quat_math.inverse(q_curr)
 
     return quat_math.mul(
@@ -196,7 +199,7 @@ local autoComputeInterpsTypes = {
         local p_next = k_next and k_next[1]
 
         t_prev = t_prev or (k_prev and k_prev[2])
-        t_next = t_prev or (k_next and k_next[2])
+        t_next = t_next or (k_next and k_next[2])
 
         local inTangent  = {0,0,0}
         local outTangent = {0,0,0}
@@ -239,9 +242,15 @@ local autoComputeInterpsTypes = {
     end,
 
     ["squad"] = function(keys, index, _, loop)
+        local nextInd = index + 1
+
+        if loop and not keys[nextInd] then
+            nextInd = 1
+        end
+
         return {
             ["in-control"] = getControlQuat(keys, index, loop),
-            ["out-control"] = getControlQuat(keys, index + 1, loop)
+            ["out-control"] = getControlQuat(keys, nextInd, loop)
         }
     end
 }
@@ -284,7 +293,7 @@ local function loadFromTable(lfaTable)
             value.rotation = quat_math.normalize(quat_math.from_xyzw(value.rotation))
         end
 
-        value.invRotation = quat_math.inverse(value.rotation)
+        value.invRotation = quat_math.conj(value.rotation)
     end
 
     local clips = { }
@@ -438,10 +447,18 @@ local function loadFromTable(lfaTable)
                             quatRot = quat_math.negate(quatRot)
                         end
 
-                        quatRot = quat_math.mul(quatRot, skeleton[boneName].invRotation)
+                        quatRot = quat_math.mul(skeleton[boneName].invRotation, quatRot)
                     end
 
                     addToKeys(rotationKeys, boneRotation, quatRot)
+
+                    local len = #rotationKeys
+
+                    if len > 1 then
+                        if quat_math.dot(rotationKeys[len][1], rotationKeys[len-1][1]) < 0 then
+                            rotationKeys[len][1] = quat_math.negate(rotationKeys[len][1])
+                        end
+                    end
                 end
 
                 if boneScale then
