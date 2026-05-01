@@ -187,6 +187,14 @@ function M:set_paused(paused)
     self.paused = paused
 end
 
+function M:pause()
+    self:set_paused(true)
+end
+
+function M:resume()
+    self:set_paused(false)
+end
+
 function M:get_sampler()
     return self.sampler
 end
