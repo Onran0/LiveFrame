@@ -26,7 +26,7 @@
 
 ```lua
 -- Возвращает обьект самого аниматора
-animator.get_player() -> animator
+animator.get_animator() -> animator
 
 --Задаёт обработчик конкретного ивента
 animator.set_event_handler(name: string, func: function)
