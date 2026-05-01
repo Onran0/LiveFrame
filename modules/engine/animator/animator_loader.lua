@@ -267,7 +267,7 @@ local allParameterTypes = {
     "trigger"
 }
 
-local loaders = require "engine/loaders"
+local loader = require "engine/clips/loader"
 local clips_meta_combiner = require "engine/clips/meta_combiner"
 local timer = require "engine/timer"
 
@@ -405,13 +405,7 @@ local function loadFromTable(animatorTable)
             error("clips file with id '" .. fileInfo.id .. "' already defined")
         end
 
-        local ext = file.ext(fileInfo.file)
-
-        if not loaders[ext] then
-            error("unknown animation clips format: '" .. ext .. "'")
-        end
-
-        local status, val = pcall(loaders[ext].load, file.read(fileInfo.file))
+        local status, val = pcall(loader.load_from_path, fileInfo.file)
 
         if not status then
             error("failed to load '" .. fileInfo.file .. "' animation clips file: " .. val)
