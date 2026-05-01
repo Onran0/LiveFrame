@@ -203,7 +203,7 @@ local structures = {
             [FIELD_STATES] = arrayOf(structureType("state")),
             [FIELD_TRANSITIONS] = arrayOf(structureType("transition"))
         },
-        requiredFields = { FIELD_NAME, FIELD_DEFAULT_STATE, FIELD_STATES, FIELD_TRANSITIONS }
+        requiredFields = { FIELD_NAME, FIELD_DEFAULT_STATE, FIELD_STATES }
     },
 
     state = {
@@ -237,7 +237,7 @@ local structures = {
             [FIELD_LAYERS] = arrayOf(structureType("layer"))
         },
 
-        requiredFields = { FIELD_CLIPS, FIELD_PARAMETERS, FIELD_LAYERS }
+        requiredFields = { FIELD_CLIPS, FIELD_LAYERS }
     }
 }
 
@@ -357,6 +357,17 @@ local function checkValueConsistency(value, valueType, inconsistencies)
             end
         end
 
+        for _, requiredField in ipairs(structure.requiredFields) do
+            if not value[requiredField] then
+                table.insert(
+                        inconsistencies,
+                        "missed required field '" .. requiredField .. "' in structure '" .. valueType.value .. "'"
+                )
+
+                return false
+            end
+        end
+
         return true
     else
         table.insert(
@@ -389,7 +400,7 @@ local function loadFromTable(animatorTable)
 
     local conditionsPrefix = "local "
 
-    for _, fileInfo in ipairs(animatorTable.clips) do
+    for _, fileInfo in ipairs(animatorTable[FIELD_CLIPS]) do
         if table.has(clipsMetadataIndices, fileInfo.id) then
             error("clips file with id '" .. fileInfo.id .. "' already defined")
         end
@@ -414,32 +425,30 @@ local function loadFromTable(animatorTable)
         table.insert(clipsMetadataArray, val)
     end
 
-    for index, parameter in ipairs(animatorTable.parameters) do
-        if not table.has(allParameterTypes, parameter.type) then
-            error("invalid parameter type: " .. parameter.type)
-        end
+    if animatorTable[FIELD_PARAMETERS] then
+        for index, parameter in ipairs(animatorTable[FIELD_PARAMETERS]) do
+            if not table.has(allParameterTypes, parameter.type) then
+                error("invalid parameter type: " .. parameter.type)
+            end
 
-        if parametersTypes[parameter.name] then
-            error("parameter with name '" .. parameter.name .. "' already defined")
-        end
+            if parametersTypes[parameter.name] then
+                error("parameter with name '" .. parameter.name .. "' already defined")
+            end
 
-        parametersTypes[parameter.name] = parameterTypeToIndex[parameter.type]
-        parametersIndices[parameter.name] = index
+            parametersTypes[parameter.name] = parameterTypeToIndex[parameter.type]
+            parametersIndices[parameter.name] = index
 
-        conditionsPrefix = conditionsPrefix .. parameter.name
-
-        if index ~= #animatorTable.parameters then
-            conditionsPrefix = conditionsPrefix .. ", "
+            conditionsPrefix = conditionsPrefix .. parameter.name .. ", "
         end
     end
 
-    conditionsPrefix = conditionsPrefix .. ", t = ...; return "
+    conditionsPrefix = conditionsPrefix .. "t = ...; return "
 
     local layersNames = { }
 
-    for _, layer in ipairs(animatorTable.layers) do
-        if table.has(layersNames, layer.name) then
-            error("layer with name '" .. layer.name .. "' already defined")
+    for _, layer in ipairs(animatorTable[FIELD_LAYERS]) do
+        if table.has(layersNames, layer[FIELD_NAME]) then
+            error("layer with name '" .. layer[FIELD_NAME] .. "' already defined")
         end
 
         local layerStatesIndices = { }
@@ -448,31 +457,31 @@ local function loadFromTable(animatorTable)
 
         local function validateStateExist(stateName)
             if not table.has(statesNames, stateName) then
-                error("state with name '" .. stateName .. "' is undefined in layer '" .. layer.name .. "'")
+                error("state with name '" .. stateName .. "' is undefined in layer '" .. layer[FIELD_NAME] .. "'")
             end
         end
 
         local finalStates = { }
         local affectedBones = { }
 
-        for _, state in ipairs(layer.states) do
-            if table.has(statesNames, state.name) then
-                error("state with name '" .. state.name .. "' already defined in layer '" .. layer.name .. "'")
+        for _, state in ipairs(layer[FIELD_STATES]) do
+            if table.has(statesNames, state[FIELD_NAME]) then
+                error("state with name '" .. state[FIELD_NAME] .. "' already defined in layer '" .. layer[FIELD_NAME] .. "'")
             end
 
-            local stateType = state.type or STATE_TYPE_CLIP
+            local stateType = state[FIELD_TYPE] or STATE_TYPE_CLIP
 
             if not table.has(STATE_TYPES, stateType) then
                 error("unknown state type: '" .. stateType .. "'")
             end
 
-            table.insert(layerStatesIndices, state.name)
+            table.insert(layerStatesIndices, state[FIELD_NAME])
 
-            if stateType == STATE_TYPE_CLIP and not state.clip then
-                error("clip name for state '" .. state.name .. "' is missed")
+            if stateType == STATE_TYPE_CLIP and not state[FIELD_CLIP] then
+                error("clip name for state '" .. state[FIELD_NAME] .. "' is missed")
             end
 
-            local fileId, clipName = unpack(state.clip:split(":"))
+            local fileId, clipName = unpack(state[FIELD_CLIP]:split(":"))
 
             local idx = table.index(clipsMetadataIndices, fileId)
 
@@ -482,8 +491,8 @@ local function loadFromTable(animatorTable)
 
             local hasClip = false
 
-            for _, clip in ipairs(clipsMetadataArray[idx].clips) do
-                if clip.name == clipName then
+            for _, clip in ipairs(clipsMetadataArray[idx][FIELD_CLIPS]) do
+                if clip[FIELD_NAME] == clipName then
                     hasClip = true
                     break
                 end
@@ -510,13 +519,13 @@ local function loadFromTable(animatorTable)
             local stateTimer = timer:new()
 
             local finalState = {
-                name = state.name,
+                name = state[FIELD_NAME],
                 clip = finalClipName,
                 timer = stateTimer,
-                loop = state.loop
+                loop = state[FIELD_LOOP]
             }
 
-            table.insert(statesNames, state.name)
+            table.insert(statesNames, state[FIELD_NAME])
 
             table.insert(finalStates, finalState)
 
@@ -525,75 +534,77 @@ local function loadFromTable(animatorTable)
 
         local finalTransitions = { }
 
-        for _, transition in ipairs(layer.transitions) do
-            local conditionFunc, err = load(conditionsPrefix .. transition.condition)
+        if layer[FIELD_TRANSITIONS] then
+            for _, transition in ipairs(layer[FIELD_TRANSITIONS]) do
+                local conditionFunc, err = load(conditionsPrefix .. transition[FIELD_CONDITION])
 
-            if err then
-                error(
-                        "failed to compile transition condition '" .. transition.condition .. "' in layer '"
-                                .. layer.name .. "': " .. err
-                )
-            end
-
-            local toState = transition.to
-            local duration = transition.duration
-            local exitTime = transition["exit-time"]
-            local blendCurve = transition["blend-curve"] or TRANSITION_BLEND_CURVE_LINEAR
-            local interrupt = transition["can-interrupt"] or "none"
-
-            validateStateExist(toState)
-
-            if duration < 0 then
-                error("transition duration can't be negative")
-            end
-
-            if exitTime and (exitTime < 0 or exitTime > 1) then
-                error("exit-time must be normalized")
-            end
-
-            if not table.has(TRANSITION_BLEND_CURVES, blendCurve) then
-                error("unknown transition blend curve type: " .. blendCurve)
-            end
-
-            if not table.has(TRANSITION_INTERRUPT_TYPES, interrupt) then
-                error("unknown transition interrupt type: " .. interrupt)
-            end
-
-            local baseTable = {
-                to = table.index(layerStatesIndices, toState),
-                priority = transition.priority or 0,
-                interrupt = interruptTypeToIndex[interrupt],
-                duration = duration,
-                timer = timer:new(transition.duration),
-                exitTime = exitTime,
-                blendCurve = transitionBlendCurveTypeToIndex[blendCurve],
-                conditionFunc = conditionFunc
-            }
-
-            local function addTransition(from, tbl)
-                validateStateExist(from)
-
-                if from == toState then
-                    error("'from' state can't equals to 'to'")
+                if err then
+                    error(
+                            "failed to compile transition condition '" .. transition[FIELD_CONDITION] .. "' in layer '"
+                                    .. layer[FIELD_NAME] .. "': " .. err
+                    )
                 end
 
-                tbl.from = table.index(layerStatesIndices, from)
+                local toState = transition[FIELD_TO]
+                local duration = transition[FIELD_DURATION]
+                local exitTime = transition[FIELD_EXIT_TIME]
+                local blendCurve = transition[FIELD_BLEND_CURVE] or TRANSITION_BLEND_CURVE_LINEAR
+                local interrupt = transition[FIELD_CAN_INTERRUPT] or TRANSITION_INTERRUPT_NONE
 
-                table.insert(finalTransitions, tbl)
-            end
+                validateStateExist(toState)
 
-            if type(transition.from) == "table" then
-                for _, fromState in ipairs(transition.from) do
-                    addTransition(fromState, table.deep_copy(baseTable))
+                if duration < 0 then
+                    error("transition duration can't be negative")
                 end
-            else
-                addTransition(transition.from, baseTable)
+
+                if exitTime and (exitTime < 0 or exitTime > 1) then
+                    error("exit time must be normalized")
+                end
+
+                if not table.has(TRANSITION_BLEND_CURVES, blendCurve) then
+                    error("unknown transition blend curve type: " .. blendCurve)
+                end
+
+                if not table.has(TRANSITION_INTERRUPT_TYPES, interrupt) then
+                    error("unknown transition interrupt type: " .. interrupt)
+                end
+
+                local baseTable = {
+                    to = table.index(layerStatesIndices, toState),
+                    priority = transition[FIELD_PRIORITY] or 0,
+                    interrupt = interruptTypeToIndex[interrupt],
+                    duration = duration,
+                    timer = timer:new(duration),
+                    exitTime = exitTime,
+                    blendCurve = transitionBlendCurveTypeToIndex[blendCurve],
+                    conditionFunc = conditionFunc
+                }
+
+                local function addTransition(from, tbl)
+                    validateStateExist(from)
+
+                    if from == toState then
+                        error("'from' state can't equals to 'to'")
+                    end
+
+                    tbl.from = table.index(layerStatesIndices, from)
+
+                    table.insert(finalTransitions, tbl)
+                end
+
+                if type(transition.from) == "table" then
+                    for _, fromState in ipairs(transition.from) do
+                        addTransition(fromState, table.deep_copy(baseTable))
+                    end
+                else
+                    addTransition(transition.from, baseTable)
+                end
             end
         end
 
         local weight = layer.weight or 1.0
-        local blendMode = layer["blend-mode"] or LAYER_BLEND_MODE_OVERRIDE
-        local defaultState = layer["default-state"]
+        local blendMode = layer[FIELD_BLEND_MODE] or LAYER_BLEND_MODE_OVERRIDE
+        local defaultState = layer[FIELD_DEFAULT_STATE]
 
         if weight < 0 or weight > 1 then
             error("invalid layer weight: " .. weight)
@@ -606,10 +617,10 @@ local function loadFromTable(animatorTable)
         validateStateExist(defaultState)
 
         table.insert(layers, {
-            name = layer.name,
+            name = layer[FIELD_NAME],
             affectedBones = affectedBones,
             blendMode = layerBlendModeTypeToIndex[blendMode],
-            weight = layer.weight or 1.0,
+            weight = weight,
             currentState = table.index(layerStatesIndices, defaultState),
             states = finalStates,
             transitions = finalTransitions
@@ -621,7 +632,7 @@ local function loadFromTable(animatorTable)
     local clipsMetadata = clips_meta_combiner.combine(clipsMetadataArray, overrideClipsNames)
 
     for _, finalState in ipairs(allFinalStatesArray) do
-        local clipName = finalState.clip
+        local clipName = finalState[FIELD_CLIP]
         local clipIndex
         local clip
 
@@ -635,12 +646,12 @@ local function loadFromTable(animatorTable)
 
         if not clipIndex then error("unknown clip: " .. clipName) end
 
-        finalState.clip = clipIndex
+        finalState[FIELD_CLIP] = clipIndex
 
         local stateTimer = finalState.timer
 
-        stateTimer:set_duration(clip.duration)
-        stateTimer:set_loop(finalState.loop)
+        stateTimer:set_duration(clip[FIELD_DURATION])
+        stateTimer:set_loop(finalState[FIELD_LOOP])
     end
 
     return {
