@@ -13,7 +13,7 @@ if ARGS[FIELD_PATH] then
     player = api.create_player(ARGS[FIELD_PATH], skeleton, eventHandlers)
 elseif ARGS[FIELD_PATHS] then
     player = api.create_player_multi(
-            ARGS[FIELD_PATHS], ARGS[FIELD_OVERRIDE_CLIP_NAMES] or { },
+            ARGS[FIELD_PATHS], ARGS[FIELD_OVERRIDE_CLIP_NAMES],
             skeleton, eventHandlers
     )
 end

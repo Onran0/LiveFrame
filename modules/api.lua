@@ -37,7 +37,7 @@ function M.create_player(filePath, skeleton, eventHandlers)
     return createPlayer(loadClipsMetadata(filePath), skeleton, eventHandlers)
 end
 
-function M.create_player_multi(filePaths, overrideClipNames, skeleton, eventHandlers)
+function M.create_player_multi(filePaths, skeleton, overrideClipNames, eventHandlers)
     local clipsMetadataArray = { }
 
     for index, filePath in ipairs(filePaths) do
