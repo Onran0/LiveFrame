@@ -31,7 +31,7 @@ api.create_animator(
         -- целевой скелет сущности, на который будут применяться трансформации
         skeleton: table,
         -- таблица, содержащая обработчики разных ивентов
-        [опционально] eventHandlers: table<name=function>
+        [опционально] eventHandlers: table<string=function>
 ) -> animator
 ```
 
@@ -62,7 +62,7 @@ api.create_player(
         -- целевой скелет сущности, на который будут применяться трансформации
         skeleton: table,
         -- таблица, содержащая обработчики разных ивентов
-        [опционально] eventHandlers: table<name=function>
+        [опционально] eventHandlers: table<string=function>
 ) -> player
 ```
 
@@ -72,17 +72,17 @@ api.create_player_multi(
         filePaths: table<string>,
         -- целевой скелет сущности, на который будут применяться трансформации
         skeleton: table,
-        --[[ таблица, позволяющая переопределить имена клипов при загрузке в формате
+        --[[ таблица, позволяющая переопределить имена клипов при загрузке. формат:
         {
             [индекс файла в массиве filePaths] = {
-                прежнее_название_клипа = новое_Название_клипа,
+                прежнее_название_клипа = новое_название_клипа,
                 ...
             }
         }
         ]]--
-        [опционально] overrideClipNames: table<index=table<string=string>>
+        [опционально] overrideClipNames: table<int=table<string=string>>
         -- таблица, содержащая обработчики разных ивентов
-        [опционально] eventHandlers: table<name=function>
+        [опционально] eventHandlers: table<string=function>
 ) -> player
 ```
 
