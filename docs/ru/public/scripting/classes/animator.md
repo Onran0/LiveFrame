@@ -32,7 +32,7 @@ animator:set_paused(paused: boolean)
 -- вызова. Функция должна вызываться каждый кадр
 animator:step(delta: number)
 
--- Возвращает сэмплер, используемый аниматором
+-- Возвращает сэмплер, используемый аниматором (см. classes/sampler.md)
 animator:get_sampler() -> sampler
 
 -- Задаёт новый скелет для применения трансформаций
