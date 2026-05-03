@@ -24,6 +24,8 @@ end
 
 ## Создание аниматора
 
+Возвращает [animator](../classes/animator.md).
+
 ```lua
 api.create_animator(
         -- путь к файлу с описанием аниматора
@@ -54,6 +56,8 @@ animator:set_boolean("playWalk", true)
 ```
 
 ## Создание простого проигрывателя
+
+Возвращают [player](../classes/player.md).
 
 ```lua
 api.create_player(
