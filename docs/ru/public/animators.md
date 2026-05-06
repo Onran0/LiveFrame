@@ -9,6 +9,8 @@
 - `clips` - массив, с помощью которого определяются файлы с клипами и откуда их импортировать;
 - - `id` - идентификатор файла в аниматоре;
 - - `file` - путь к файлу с клипами в формате `packid:folder/file.format`.
+- - `load-settings` - таблица, позволяющая определить некоторые, возможно специфические
+параметры для загрузки этого файла. (см. [load_settings](load_settings.md)).
 
 - `parameters` - массив с определениями параметров аниматора;
 - - `name` - название параметра;
@@ -50,7 +52,10 @@
     "clips": [
         {
             "id": "base",
-            "file": "packid:animations/base.lfa"
+            "file": "packid:animations/base.lfa",
+            "load-settings": {
+                "relativize-transforms": true
+            }
         },
         {
             "id": "jump",

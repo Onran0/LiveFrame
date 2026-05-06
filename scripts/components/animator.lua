@@ -18,10 +18,7 @@ local FIELD_PATH = "path"
 
 local api = require "api"
 
-local eventHandlers = { }
-local skeleton = entity.skeleton
-
-local animator = api.create_animator(ARGS[FIELD_PATH], skeleton, eventHandlers)
+local animator = api.create_animator(entity.skeleton, ARGS[FIELD_PATH])
 
 function get()
     return animator

@@ -14,7 +14,6 @@
    limitations under the License.
 ]]--
 
-local FIELD_PATH = "path"
 local FIELD_FILES = "files"
 
 local api = require "api"
@@ -23,10 +22,10 @@ local skeleton = entity.skeleton
 
 local player
 
-if ARGS[FIELD_PATH] then
-    player = api.create_player(ARGS[FIELD_PATH], skeleton)
+if ARGS[FIELD_FILES] then
+    player = api.create_player(skeleton, ARGS)
 elseif ARGS[FIELD_FILES] then
-    player = api.create_player_multi(
+    player = api.create_player(
             skeleton,
             unpack(ARGS[FIELD_FILES])
     )

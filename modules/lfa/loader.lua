@@ -336,13 +336,20 @@ local function eulerToQuat(euler, order)
     return quat.from_mat4(m)
 end
 
-local function loadFromTable(lfaTable)
+local function loadFromTable(lfaTable, loadSettings)
     local interpTypesIndices = { }
     local interpFieldsIndices = { }
     local bonesIndices = { }
 
     local eulerOrder = lfaTable.metadata.eulerOrder
-    local relativizeTransforms = lfaTable.metadata.relativizeTransforms
+    local relativizeTransforms
+
+    if loadSettings.relativizeTransforms ~= nil then
+        relativizeTransforms = loadSettings.relativizeTransforms
+    else
+        relativizeTransforms = lfaTable.metadata.relativizeTransforms
+    end
+
     local skeleton = table.deep_copy(lfaTable.skeleton)
 
     for _, value in pairs(skeleton) do
@@ -588,12 +595,24 @@ local function loadFromTable(lfaTable)
         keys[index][constants.KEY_INTERP_FIELDS_INDEX] = plainFields
     end
 
+    for _, boneBindPose in pairs(lfaTable.skeleton) do
+        local rotation = boneBindPose.rotation
+
+        if #rotation == 3 then
+            rotation = eulerToQuat(rotation, eulerOrder)
+        else
+            rotation = quat_math.from_xyzw(rotation)
+        end
+
+        boneBindPose.rotation = rotation
+    end
+
     place_default_bones_transforms(clips, bonesIndices, relativizeTransforms, lfaTable.skeleton)
 
     return
     {
         metadata = {
-            relativizedTransforms = lfaTable.metadata.relativizeTransforms,
+            relativizedTransforms = relativizeTransforms,
             skeleton = lfaTable.skeleton
         },
         interpTypesIndices = interpTypesIndices,
@@ -603,17 +622,17 @@ local function loadFromTable(lfaTable)
     }
 end
 
-function M.load(value)
+function M.load(value, loadSettings)
     local t = type(value)
 
     if t == 'table' then
         if value.clips and value.interps then -- check for pure LFA table
-            return loadFromTable(value)
+            return loadFromTable(value, loadSettings)
         else -- passing analyzed structure
-            return loadFromTable(analyzer.analyze(value))
+            return loadFromTable(analyzer.analyze(value), loadSettings)
         end
     else
-        return loadFromTable(analyzer.analyze(structure_parser.parse(value)))
+        return loadFromTable(analyzer.analyze(structure_parser.parse(value)), loadSettings)
     end
 end
 

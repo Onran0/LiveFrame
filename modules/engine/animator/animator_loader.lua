@@ -126,6 +126,8 @@ local FIELD_CLIPS = "clips"
 local FIELD_ID = "id"
 local FIELD_FILE = "file"
 
+local FIELD_LOAD_SETTINGS = "load-settings"
+
 local FIELD_NAME = "name"
 
 local FIELD_PARAMETERS = "parameters"
@@ -197,7 +199,8 @@ local structures = {
     clipsFile = {
         fields = {
             [FIELD_ID] = luaType("string"),
-            [FIELD_FILE] = luaType("string")
+            [FIELD_FILE] = luaType("string"),
+            [FIELD_LOAD_SETTINGS] = luaType("table")
         },
         requiredFields = { FIELD_ID, FIELD_FILE }
     },
@@ -417,21 +420,21 @@ local function loadFromTable(animatorTable)
     local conditionsPrefix = "local "
 
     for _, fileInfo in ipairs(animatorTable[FIELD_CLIPS]) do
-        if table.has(clipsMetadataIndices, fileInfo.id) then
-            error("clips file with id '" .. fileInfo.id .. "' already defined")
+        if table.has(clipsMetadataIndices, fileInfo[FIELD_ID]) then
+            error("clips file with id '" .. fileInfo[FIELD_ID] .. "' already defined")
         end
 
-        local status, val = pcall(loader.load_from_path, fileInfo.file)
+        local status, val = pcall(loader.load_from_path, fileInfo[FIELD_FILE], fileInfo[FIELD_LOAD_SETTINGS])
 
         if not status then
-            error("failed to load '" .. fileInfo.file .. "' animation clips file: " .. val)
+            error("failed to load '" .. fileInfo[FIELD_FILE] .. "' animation clips file: " .. val)
         end
 
         for _, clip in ipairs(val.clips) do
-            affectedBonesByClips[fileInfo.id .. "_" .. clip.name] = clip.affectedBones
+            affectedBonesByClips[fileInfo[FIELD_ID] .. "_" .. clip.name] = clip.affectedBones
         end
 
-        table.insert(clipsMetadataIndices, fileInfo.id)
+        table.insert(clipsMetadataIndices, fileInfo[FIELD_ID])
         table.insert(clipsMetadataArray, val)
     end
 

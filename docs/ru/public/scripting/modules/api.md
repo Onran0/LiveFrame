@@ -3,6 +3,11 @@
 Данный модуль используется для взаимодействия сторонних контент-паков с **LiveFrame**
 и его функционалом.
 
+## Настройки загрузки
+
+При создании проигрывателя или объявлении аниматора можно дополнительно
+указать некоторые 
+
 ## Обработчики ивентов
 
 **LiveFrame** поддерживает события клипов, которые можно перехватывать с помощью
@@ -40,8 +45,8 @@ api.create_animator(
 local liveframe = require "liveframe:api"
 
 local animator = liveframe.create_animator(
-        "packid:animators/some_entity.json",
-        entity.skeleton
+        entity.skeleton,
+        "packid:animators/some_entity.json"
 )
 
 animator:set_event_handler("attack", function()
@@ -55,34 +60,16 @@ animator:set_boolean("playWalk", true)
 
 ## Создание простого проигрывателя
 
-Возвращают [player](../classes/player.md).
+Возвращает [player](../classes/player.md).
 
 ```lua
 api.create_player(
-        -- путь к файлу с анимационными клипами
-        filePath: string,
-        -- целевой скелет сущности, на который будут применяться трансформации
-        skeleton: table
-) -> player
-```
-
-```lua
-api.create_player_multi(
         -- целевой скелет сущности, на который будут применяться трансформации
         skeleton: table,
-        
+
         --[[
-        массив с данными о файлов с клипами, где каждый элемент это путь к файлу
-        в виде строки, либо таблица с дополнительными данными в следующем формате:
-        {
-            path = "путь к файлу с клипами",
-        
-            -- таблица, позволяющая переопределить названия некоторых клипов из файла
-            [опционально] overrides = {
-                старое_имя_клипа = "новое_имя_клипа",
-                ...
-            }
-        }
+        массив с данными о файлах с клипами, где каждый элемент это путь к файлу
+        в виде строки, либо clips_file_data
         ]]--
         filesData: ...
 ) -> player
@@ -90,12 +77,14 @@ api.create_player_multi(
 
 Примеры:
 
+**Один файл**
+
 ```lua
 local liveframe = require "liveframe:api"
 
 local player = liveframe.create_player(
-        "packid:animations/some_clips.lfa",
-        entity.skeleton
+        entity.skeleton,
+        "packid:animations/some_clips.lfa"
 )
 
 player:set_event_handler("attack", function()
@@ -105,16 +94,21 @@ end)
 player:set_speed(1.0)
 ```
 
+**Несколько файлов**
+
 ```lua
 local liveframe = require "liveframe:api"
 
-local player = liveframe.create_player_multi(
+local player = liveframe.create_player(
         entity.skeleton,
         "packid:animations/some_clips_1.lfa",
         {
             filePath = "packid:animations/some_clips_2.lfa",
             overrides = {
                 walk = "walk_2"
+            },
+            loadSettings = {
+                relativizeTransforms = true
             }
         }
 )

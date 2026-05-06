@@ -21,9 +21,13 @@ local loaders = {
     }
 }
 
+local loadSettingsAliases = {
+    relativizeTransforms = "relativize-transforms"
+}
+
 local M = { }
 
-function M.load_from_path(filePath)
+function M.load_from_path(filePath, loadSettings)
     local ext = file.ext(filePath)
 
     local loader = loaders[ext]
@@ -32,7 +36,16 @@ function M.load_from_path(filePath)
         error("unsupported animations format: " .. ext)
     end
 
-    return loader.func(loader.binary and file.read_bytes(filePath) or file.read(filePath))
+    if loadSettings then
+        for name, alias in pairs(loadSettingsAliases) do
+            if loadSettings[alias] ~= nil then
+                loadSettings[name] = loadSettings[alias]
+                loadSettings[alias] = nil
+            end
+        end
+    end
+
+    return loader.func(loader.binary and file.read_bytes(filePath) or file.read(filePath), loadSettings or { })
 end
 
 function M.get_load_function_by_extension(ext)

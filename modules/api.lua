@@ -25,8 +25,8 @@ local clips_meta_combiner = require "engine/clips/meta_combiner"
 
 local M = { }
 
-local function loadClipsMetadata(filePath)
-    local status, val = pcall(loader.load_from_path, filePath)
+local function loadClipsMetadata(filePath, loadSettings)
+    local status, val = pcall(loader.load_from_path, filePath, loadSettings)
 
     if not status then
         error("failed to load animations file '" .. filePath .. "': " .. val)
@@ -35,11 +35,7 @@ local function loadClipsMetadata(filePath)
     return val
 end
 
-local function createPlayer(clipsMetadata, skeleton)
-    return player:new(sampler:new(clipsMetadata), skeleton)
-end
-
-function M.create_animator(filePath, skeleton)
+function M.create_animator(skeleton, filePath)
     local status, res = pcall(animator_loader.load, file.read(filePath))
 
     if not status then
@@ -49,11 +45,7 @@ function M.create_animator(filePath, skeleton)
     return animator:new(res, skeleton)
 end
 
-function M.create_player(filePath, skeleton)
-    return createPlayer(loadClipsMetadata(filePath), skeleton)
-end
-
-function M.create_player_multi(skeleton, ...)
+function M.create_player(skeleton, ...)
     local filesData = { ... }
 
     local clipsMetadataArray = { }
@@ -62,16 +54,20 @@ function M.create_player_multi(skeleton, ...)
     for index, fileData in ipairs(filesData) do
         local isOnlyPath = type(fileData) == "string"
 
-        clipsMetadataArray[index] = loadClipsMetadata(isOnlyPath and fileData or fileData.path)
+        if isOnlyPath then
+            clipsMetadataArray[index] = loadClipsMetadata(fileData)
+        else
+            clipsMetadataArray[index] = loadClipsMetadata(fileData.path, fileData.loadSettings)
 
-        if not isOnlyPath then
             overrideClipNames[index] = fileData.overrides
         end
     end
 
-    local clipsMetadata = clips_meta_combiner.combine(clipsMetadataArray, overrideClipNames)
-
-    return createPlayer(clipsMetadata, skeleton)
+    return player:new(
+                sampler:new(
+                        clips_meta_combiner.combine(clipsMetadataArray, overrideClipNames)
+                ), skeleton
+    )
 end
 
 return M
