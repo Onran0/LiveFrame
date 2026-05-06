@@ -31,9 +31,7 @@ api.create_animator(
         -- путь к файлу с описанием аниматора
         filePath: string,
         -- целевой скелет сущности, на который будут применяться трансформации
-        skeleton: table,
-        -- таблица, содержащая обработчики разных ивентов
-        [опционально] eventHandlers: table<string=function>
+        skeleton: table
 ) -> animator
 ```
 
@@ -43,15 +41,15 @@ local liveframe = require "liveframe:api"
 
 local animator = liveframe.create_animator(
         "packid:animators/some_entity.json",
-        entity.skeleton,
-        {
-            attack = function()
-                print("ATTACK!")
-            end
-        }
+        entity.skeleton
 )
 
+animator:set_event_handler("attack", function()
+    print("ATTACK!")
+end)
+
 animator:set_speed(1.0)
+
 animator:set_boolean("playWalk", true)
 ```
 
@@ -64,29 +62,29 @@ api.create_player(
         -- путь к файлу с анимационными клипами
         filePath: string,
         -- целевой скелет сущности, на который будут применяться трансформации
-        skeleton: table,
-        -- таблица, содержащая обработчики разных ивентов
-        [опционально] eventHandlers: table<string=function>
+        skeleton: table
 ) -> player
 ```
 
 ```lua
 api.create_player_multi(
-        -- пути к файлам с анимационными клипами
-        filePaths: table<string>,
         -- целевой скелет сущности, на который будут применяться трансформации
         skeleton: table,
-        --[[ таблица, позволяющая переопределить имена клипов при загрузке. формат:
+        
+        --[[
+        массив с данными о файлов с клипами, где каждый элемент это путь к файлу
+        в виде строки, либо таблица с дополнительными данными в следующем формате:
         {
-            [индекс файла в массиве filePaths] = {
-                прежнее_название_клипа = новое_название_клипа,
+            path = "путь к файлу с клипами",
+        
+            -- таблица, позволяющая переопределить названия некоторых клипов из файла
+            [опционально] overrides = {
+                старое_имя_клипа = "новое_имя_клипа",
                 ...
             }
         }
         ]]--
-        [опционально] overrideClipNames: table<int=table<string=string>>
-        -- таблица, содержащая обработчики разных ивентов
-        [опционально] eventHandlers: table<string=function>
+        filesData: ...
 ) -> player
 ```
 
@@ -97,13 +95,12 @@ local liveframe = require "liveframe:api"
 
 local player = liveframe.create_player(
         "packid:animations/some_clips.lfa",
-        entity.skeleton,
-        {
-            attack = function()
-                print("ATTACK!")
-            end
-        }
+        entity.skeleton
 )
+
+player:set_event_handler("attack", function()
+    print("ATTACK!")
+end)
 
 player:set_speed(1.0)
 ```
@@ -112,25 +109,19 @@ player:set_speed(1.0)
 local liveframe = require "liveframe:api"
 
 local player = liveframe.create_player_multi(
-        {
-            "packid:animations/some_clips_1.lfa",
-            "packid:animations/some_clips_2.lfa"
-        },
         entity.skeleton,
+        "packid:animations/some_clips_1.lfa",
         {
-            {
-                walk = "walk_1"
-            },
-            {
+            filePath = "packid:animations/some_clips_2.lfa",
+            overrides = {
                 walk = "walk_2"
             }
-        },
-        {
-            attack = function()
-                print("ATTACK!")
-            end
         }
 )
+
+player:set_event_handler("attack", function()
+    print("ATTACK!")
+end)
 
 player:play("walk_2")
 ```

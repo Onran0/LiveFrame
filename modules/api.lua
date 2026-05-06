@@ -35,34 +35,43 @@ local function loadClipsMetadata(filePath)
     return val
 end
 
-local function createPlayer(clipsMetadata, skeleton, eventHandlers)
-    return player:new(sampler:new(clipsMetadata), skeleton, eventHandlers)
+local function createPlayer(clipsMetadata, skeleton)
+    return player:new(sampler:new(clipsMetadata), skeleton)
 end
 
-function M.create_animator(filePath, skeleton, eventHandlers)
+function M.create_animator(filePath, skeleton)
     local status, res = pcall(animator_loader.load, file.read(filePath))
 
     if not status then
         error("failed to load animator '" .. filePath .. "': " .. res)
     end
 
-    return animator:new(res, skeleton, eventHandlers)
+    return animator:new(res, skeleton)
 end
 
-function M.create_player(filePath, skeleton, eventHandlers)
-    return createPlayer(loadClipsMetadata(filePath), skeleton, eventHandlers)
+function M.create_player(filePath, skeleton)
+    return createPlayer(loadClipsMetadata(filePath), skeleton)
 end
 
-function M.create_player_multi(filePaths, skeleton, overrideClipNames, eventHandlers)
+function M.create_player_multi(skeleton, ...)
+    local filesData = { ... }
+
     local clipsMetadataArray = { }
+    local overrideClipNames = { }
 
-    for index, filePath in ipairs(filePaths) do
-        clipsMetadataArray[index] = loadClipsMetadata(filePath)
+    for index, fileData in ipairs(filesData) do
+        local isOnlyPath = type(fileData) == "string"
+
+        clipsMetadataArray[index] = loadClipsMetadata(isOnlyPath and fileData or fileData.path)
+
+        if not isOnlyPath then
+            overrideClipNames[index] = fileData.overrides
+        end
     end
 
     local clipsMetadata = clips_meta_combiner.combine(clipsMetadataArray, overrideClipNames)
 
-    return createPlayer(clipsMetadata, skeleton, eventHandlers)
+    return createPlayer(clipsMetadata, skeleton)
 end
 
 return M

@@ -26,15 +26,12 @@
 
 ```lua
 -- Возвращает обьект самого аниматора
-animator.get_animator() -> animator
-
---Задаёт обработчик конкретного ивента
-animator.set_event_handler(name: string, func: function)
+component.get() -> animator
 ```
 
 Пример:
 ```lua
-local animator = entity:require_component("liveframe:animator").get_animator()
+local animator = entity:require_component("liveframe:animator").get()
 
 animator:set_boolean("walk", true)
 ```

@@ -24,24 +24,23 @@
 ```
 
 ### Мульти-режим
-- `paths` - пути к файлам с анимационными клипами;
-- `override-clip-names` - таблица с переопределниями имён некоторых клипов (см. [liveframe:api](../modules/api.md)).
+- `files` - массив с данными о файлах с клипами, в котором каждый элемент это или
+строка с путём к файлу с клипами, или таблица с дополнительными данными в следующем формате:
+- - `path` - строка с путём к файлу;
+- - `*overrides` - опциональная таблица с переопределениями имён некоторых клипов (см. [liveframe:api](../modules/api.md)).
 
 Пример:
 ```json
 {
     "name": "liveframe:player",
     "args": {
-        "paths": [
+        "files": [
             "packid:animations/some_clips_1.lfa",
-            "packid:animations/some_clips_2.lfa"
-        ],
-        "override-clip-names": [
             {
-                "walk": "walk_1"
-            },
-            {
-                "walk": "walk_2"
+                "path": "packid:animations/some_clips_2.lfa",
+                "overrides": {
+                    "walk": "walk_2"
+                }
             }
         ]
     }
@@ -52,17 +51,14 @@
 
 ```lua
 -- Возвращает объект самого проигрывателя анимаций
-player.get_player() -> player
-
---Задаёт обработчик конкретного ивента
-player.set_event_handler(name: string, func: function)
+component.get() -> player
 ```
 
 Пример:
 ```lua
-local player = entity:require_component("liveframe:player").get_player()
+local player = entity:require_component("liveframe:player").get()
 
-player:play("walk_1")
+player:play("walk")
 ```
 
 > [!WARNING]

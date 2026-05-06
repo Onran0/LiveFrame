@@ -9,6 +9,9 @@
 - [sampler](../objects/sampler.md).
 
 ```lua
+-- Задаёт обработчик для конкретного ивента (см. modules/api.md)
+animator:set_event_handler(eventName: string, eventHandler: function)
+
 -- Задаёт значение булевому параметру аниматора
 animator:set_boolean(name: string, value: boolean)
 

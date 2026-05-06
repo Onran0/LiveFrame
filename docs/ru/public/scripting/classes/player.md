@@ -14,6 +14,9 @@ player:play(clipName: string)
 -- Начинает проигрывание клипа по его индексу (индекс также можно получить через класс sampler)
 player:play_by_index(clipIndex: int)
 
+-- Задаёт обработчик для конкретного ивента (см. modules/api.md)
+player:set_event_handler(eventName: string, eventHandler: function)
+
 -- Возвращает имя текущего клипа
 player:get_playing_clip_name() -> string
 

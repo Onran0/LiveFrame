@@ -25,7 +25,7 @@ local M = { }
 
 M.__index = M
 
-function M:new(loadedSettings, skeleton, eventHandlers)
+function M:new(loadedSettings, skeleton)
     local samplerInstance = sampler:new(loadedSettings.clipsMetadata)
 
     local parametersValues = { }
@@ -50,7 +50,7 @@ function M:new(loadedSettings, skeleton, eventHandlers)
         speed = 1,
         paused = false,
         skeleton = skeleton,
-        eventHandlers = eventHandlers or { }
+        eventHandlers = { }
     }, self)
 
     self.__update_rig_indices(obj)
@@ -79,7 +79,7 @@ function M:__check_events(prevTime, time, state, layerIndex, inner)
             for _, event in ipairs(clip.events) do
                 local evTime = event.time
 
-                if evTime > prevTime and evTime <= time then
+                if evTime >= prevTime and evTime < time then
                     local handler = self.eventHandlers[event.name]
 
                     if handler then
@@ -173,6 +173,10 @@ end
 
 function M:__set_parameter(name, value)
     self.parametersValues[self.parametersIndices[name]] = value
+end
+
+function M:set_event_handler(eventName, eventHandler)
+    self.eventHandlers[eventName] = eventHandler
 end
 
 function M:set_boolean(name, value)

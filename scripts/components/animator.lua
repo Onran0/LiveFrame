@@ -23,11 +23,7 @@ local skeleton = entity.skeleton
 
 local animator = api.create_animator(ARGS[FIELD_PATH], skeleton, eventHandlers)
 
-function set_event_handler(name, func)
-    eventHandlers[name] = func
-end
-
-function get_animator()
+function get()
     return animator
 end
 

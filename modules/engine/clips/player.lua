@@ -23,12 +23,12 @@ setmetatable(M, { __index = timer })
 
 M.__index = M
 
-function M:new(sampler, skeleton, eventHandlers)
+function M:new(sampler, skeleton)
     local obj = setmetatable(table.merge(timer:new(), {
         sampler = sampler,
         skeleton = skeleton,
         paused = false,
-        eventHandlers = eventHandlers or { }
+        eventHandlers = { }
     }), self)
 
     obj:__update_rig_indices()
@@ -67,6 +67,10 @@ function M:__check_events(prevTime, time, inner)
             end
         end
     end
+end
+
+function M:set_event_handler(eventName, eventHandler)
+    self.eventHandlers[eventName] = eventHandler
 end
 
 function M:get_sampler()
