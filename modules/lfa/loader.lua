@@ -474,7 +474,7 @@ local function loadFromTable(lfaTable, loadSettings)
                                                               boneKeys[constants.SCALE_KEYS_INDEX]
 
                 local function addInterpTypes(transform)
-                    for _, interpType in ipairs({
+                    for _, interpType in pairs({
                         transform.interpolation.input,
                         transform.interpolation.output
                     }) do

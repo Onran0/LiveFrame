@@ -679,7 +679,7 @@ local function analyzeElementSpecial(element, lfaTable)
                 name = name
             }
 
-            local parentScope = lfaTable.temp.scopeByBone[element] or { }
+            local parentScope = lfaTable.temp.scopeByBone and lfaTable.temp.scopeByBone[element] or { }
 
             local boneTempTable = {
                 name = name,
