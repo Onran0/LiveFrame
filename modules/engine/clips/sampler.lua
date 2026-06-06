@@ -131,24 +131,13 @@ function M:get_bone_transform_sample(boneIndex, currentTime, clipIndex, returnTa
                 end
             end
 
-            if not keyTo and not looped then
+            if not keyTo then
                 transform[i] = transformKeys[#transformKeys][constants.KEY_VALUE_INDEX]
-            elseif not keyFrom and not looped then
-                transform[i] = keyTo[constants.KEY_VALUE_INDEX]
+            elseif not keyFrom then
+                transform[i] = transformKeys[1][constants.KEY_VALUE_INDEX]
             else
-                local keyToTime
-
-                if not keyTo then
-                    keyTo = transformKeys[1]
-                    keyToTime = duration
-                end
-
-                if not keyFrom then
-                    keyFrom = transformKeys[#transformKeys]
-                end
-
                 local keyFromTime = keyFrom[constants.KEY_TIME_INDEX]
-                keyToTime = keyToTime or keyTo[constants.KEY_TIME_INDEX]
+                local keyToTime = keyTo[constants.KEY_TIME_INDEX]
                 local interpTypeIndex = keyFrom[constants.KEY_INTERP_TYPE_INDEX]
 
                 local factor = (currentTime - keyFromTime) / (keyToTime - keyFromTime)

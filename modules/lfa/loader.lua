@@ -151,7 +151,7 @@ local analyzer = require "lfa/analyzer"
 
 local place_default_bones_transforms = require "util/place_default_bones_transforms"
 
-local function getControlQuat(keys, index, duration, loop)
+local function getControlQuat(keys, index)
     local k_curr = keys[index]
 
     if not k_curr then return quat_math.idt() end
@@ -163,25 +163,13 @@ local function getControlQuat(keys, index, duration, loop)
     local t_prev, t_next
 
     if not k_prev then
-        if loop then
-            k_prev = keys[#keys]
-            t_prev = t_curr - (duration - k_prev[constants.KEY_TIME_INDEX])
-        else
-            k_prev = k_curr
-            t_prev = t_curr
-        end
+        return quat_math.idt()
     else
         t_prev = k_prev[constants.KEY_TIME_INDEX]
     end
 
     if not k_next then
-        if loop then
-            k_next = keys[1]
-            t_next = t_curr + (duration - t_curr + k_next[constants.KEY_TIME_INDEX])
-        else
-            k_next = k_curr
-            t_next = t_curr
-        end
+        return quat_math.idt()
     else
         t_next = k_next[constants.KEY_TIME_INDEX]
     end
@@ -231,27 +219,17 @@ local function getControlQuat(keys, index, duration, loop)
 end
 
 local autoComputeInterpsTypes = {
-    [analyzer.interpCubicSpline] = function(keys, index, duration, loop)
+    [analyzer.interpCubicSpline] = function(keys, index)
         local k_prev = keys[index - 1]
         local k_curr = keys[index]
         local k_next = keys[index + 1]
 
-        if not k_curr then
+        if not k_curr or not k_prev or not k_next then
             return { ["in-tangent"] = {0,0,0}, ["out-tangent"] = {0,0,0} }
         end
 
         local t_curr = k_curr[constants.KEY_TIME_INDEX]
         local t_prev, t_next
-
-        if not k_prev and loop then
-            k_prev = keys[#keys]
-            t_prev = t_curr - (duration - k_prev[constants.KEY_TIME_INDEX])
-        end
-
-        if not k_next and loop then
-            k_next = keys[1]
-            t_next = duration
-        end
 
         local p_prev = k_prev and k_prev[constants.KEY_VALUE_INDEX]
         local p_curr = k_curr[constants.KEY_VALUE_INDEX]
@@ -308,8 +286,8 @@ local autoComputeInterpsTypes = {
         end
 
         return {
-            ["in-control"] = getControlQuat(keys, index, duration, loop),
-            ["out-control"] = getControlQuat(keys, nextInd, duration, loop)
+            ["in-control"] = getControlQuat(keys, index),
+            ["out-control"] = getControlQuat(keys, nextInd)
         }
     end
 }
