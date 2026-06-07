@@ -452,31 +452,19 @@ local function loadFromTable(lfaTable, loadSettings)
                                                               boneKeys[constants.SCALE_KEYS_INDEX]
 
                 local function addInterpTypes(transform)
-                    for _, interpType in pairs({
-                        transform.interpolation.input,
-                        transform.interpolation.output
-                    }) do
-                        if not table.has(analyzer.allDefaultInterpTypes, interpType) then
-                            interpType = lfaTable.interps[interpType].type
-                        end
+                    local interpType = transform.interpolation
 
-                        table.insert_unique(interpTypesIndices, interpType)
+                    if not table.has(analyzer.allDefaultInterpTypes, interpType) then
+                        interpType = lfaTable.interps[interpType].type
                     end
+
+                    table.insert_unique(interpTypesIndices, interpType)
                 end
 
                 local function addToKeys(keys, transform, value, base, keyType)
                     local type, fields
 
-                    if transform.interpolation.input and #keys > 0 then
-                        type, fields = getInterpTypeAndFields(transform.interpolation.input, base, value, keyType)
-
-                        keys[#keys][constants.KEY_INTERP_TYPE_INDEX] = type
-                        keys[#keys][constants.KEY_INTERP_FIELDS_INDEX] = fields
-
-                        tryAddToAutoComputeList(keys, type, lfaClip.loop, lfaClip.duration, fields)
-                    end
-
-                    type, fields = getInterpTypeAndFields(transform.interpolation.output, base, value, keyType)
+                    type, fields = getInterpTypeAndFields(transform.interpolation, base, value, keyType)
 
                     table.insert(keys, {
                         value,

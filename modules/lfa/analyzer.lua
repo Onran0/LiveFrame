@@ -76,16 +76,11 @@ output lfaTable structure:
                             name = "spine",
                             position = {
                                 value = { 0, 0, 0 },
-                                interpolation = {
-                                    output = "lerp"
-                                }
+                                interpolation = "lerp" -- output interpolation type
                             },
                             rotation = {
                                 value = { 0, 0, 0 },
-                                interpolation = {
-                                    input = "nlerp",
-                                    output = "slerp"
-                                }
+                                interpolation = "slerp"
                             }
                         }
                     }
@@ -98,17 +93,11 @@ output lfaTable structure:
                             name = "spine",
                             position = {
                                 value = { 1, 1, 1 },
-                                interpolation = {
-                                    input = "lerp",
-                                    output = "lerp"
-                                }
+                                interpolation = "lerp"
                             },
                             rotation = {
                                 value = { 45, 45, 90 },
-                                interpolation = {
-                                    input = "nlerp",
-                                    output = "slerp"
-                                }
+                                interpolation = "lerp"
                             }
                         }
                     }
@@ -154,12 +143,6 @@ local ATTR_ROTATION = "rotation"
 local ATTR_SCALE = "scale"
 
 local ATTR_INTERP = "interp"
-local ATTR_IN_INTERP = "in-interp"
-local ATTR_OUT_INTERP = "out-interp"
-
-local ATTR_ROTATION_INTERP = "rotation-interp"
-local ATTR_IN_ROTATION_INTERP = "in-rotation-interp"
-local ATTR_OUT_ROTATION_INTERP = "out-rotation-interp"
 
 local ATTR_NAME = "name"
 local ATTR_TIME = "time"
@@ -178,6 +161,7 @@ local VALUE_TYPE_BOOLEAN = "boolean"
 local VALUE_TYPE_STRING = "string"
 local VALUE_TYPE_VEC3 = "vec3"
 local VALUE_TYPE_QUAT = "quat"
+local VALUE_TYPE_OTHER = "other"
 
 -- interpolation types
 
@@ -269,12 +253,7 @@ local possibleAttributes = {
         [ATTR_TIME] = VALUE_TYPE_NUMBER
     },
     [SCOPE_TYPE] = {
-        [ATTR_INTERP] = VALUE_TYPE_STRING,
-        [ATTR_IN_INTERP] = VALUE_TYPE_STRING,
-        [ATTR_OUT_INTERP] = VALUE_TYPE_STRING,
-        [ATTR_ROTATION_INTERP] = VALUE_TYPE_STRING,
-        [ATTR_IN_ROTATION_INTERP] = VALUE_TYPE_STRING,
-        [ATTR_OUT_ROTATION_INTERP] = VALUE_TYPE_STRING
+        [ATTR_INTERP] = VALUE_TYPE_OTHER
     },
     [BONE_TYPE] = {
         [ATTR_NAME] = VALUE_TYPE_STRING,
@@ -282,15 +261,7 @@ local possibleAttributes = {
         -- in skeleton
         [ATTR_POSITION] = VALUE_TYPE_VEC3,
         [ATTR_ROTATION] = { VALUE_TYPE_VEC3, VALUE_TYPE_QUAT },
-        [ATTR_SCALE] = VALUE_TYPE_VEC3,
-
-        -- in keyframes
-        [ATTR_INTERP] = VALUE_TYPE_STRING,
-        [ATTR_IN_INTERP] = VALUE_TYPE_STRING,
-        [ATTR_OUT_INTERP] = VALUE_TYPE_STRING,
-        [ATTR_ROTATION_INTERP] = VALUE_TYPE_STRING,
-        [ATTR_IN_ROTATION_INTERP] = VALUE_TYPE_STRING,
-        [ATTR_OUT_ROTATION_INTERP] = VALUE_TYPE_STRING
+        [ATTR_SCALE] = VALUE_TYPE_VEC3
     },
     [EVENT_TYPE] = {
         [ATTR_NAME] = VALUE_TYPE_STRING,
@@ -304,21 +275,16 @@ local possibleAttributes = {
     },
     [POSITION_TYPE] = {
         [ATTR_VALUE] = VALUE_TYPE_VEC3,
-        [ATTR_INTERP] = VALUE_TYPE_STRING,
-        [ATTR_IN_INTERP] = VALUE_TYPE_STRING,
-        [ATTR_OUT_INTERP] = VALUE_TYPE_STRING,
+        [ATTR_INTERP] = VALUE_TYPE_STRING
     },
     [ROTATION_TYPE] = {
         [ATTR_VALUE] = { VALUE_TYPE_VEC3, VALUE_TYPE_QUAT },
-        [ATTR_ROTATION_INTERP] = VALUE_TYPE_STRING,
-        [ATTR_IN_ROTATION_INTERP] = VALUE_TYPE_STRING,
-        [ATTR_OUT_ROTATION_INTERP] = VALUE_TYPE_STRING
+        [ATTR_INTERP] = VALUE_TYPE_STRING
     },
     [SCALE_TYPE] = {
         [ATTR_VALUE] = VALUE_TYPE_VEC3,
         [ATTR_INTERP] = VALUE_TYPE_STRING,
-        [ATTR_IN_INTERP] = VALUE_TYPE_STRING,
-        [ATTR_OUT_INTERP] = VALUE_TYPE_STRING,
+        [ATTR_INTERP] = VALUE_TYPE_STRING,
     }
 }
 
@@ -329,7 +295,7 @@ local requiredAttributes = {
     [INTERP_FIELD_TYPE] = { ATTR_NAME, ATTR_VALUE },
     [CLIP_TYPE] = { ATTR_NAME },
     [KEYFRAME_TYPE] = { ATTR_TIME },
-    [SCOPE_TYPE] = { },
+    [SCOPE_TYPE] = { ATTR_INTERP },
     [BONE_TYPE] = { ATTR_NAME },
     [EVENT_TYPE] = { ATTR_NAME },
     [POSITION_TYPE] = { ATTR_VALUE },
@@ -350,20 +316,6 @@ local defaultRotationInterpTypes = {
     INTERP_STEP
 }
 
-local interpAttributes = {
-    ATTR_INTERP,
-    ATTR_IN_INTERP,
-    ATTR_OUT_INTERP
-}
-
-local rotationInterpAttributes = {
-    ATTR_ROTATION_INTERP,
-    ATTR_IN_ROTATION_INTERP,
-    ATTR_OUT_ROTATION_INTERP
-}
-
-local allInterpAttributes = table.merge(table.copy(interpAttributes), rotationInterpAttributes)
-
 local allowedCustomizableInterpTypes = {
     INTERP_CUBIC_SPLINE,
     INTERP_SQUAD
@@ -378,6 +330,12 @@ local requiredCustomizableInterpTypesFields = {
         [SQUAD_IN_CONTROL] = VALUE_TYPE_QUAT,
         [SQUAD_OUT_CONTROL] = VALUE_TYPE_QUAT
     }
+}
+
+local allTransformChannelNames = {
+    "position",
+    "rotation",
+    "scale"
 }
 
 local M = {
@@ -399,23 +357,23 @@ local function validateAndGetValueType(value)
         return VALUE_TYPE_NUMBER
     elseif type == 'string' then
         return VALUE_TYPE_STRING
-    elseif type == 'table' then
-        if #value == 3 then
-            return VALUE_TYPE_VEC3
-        elseif #value == 4 then
-            for i = 1, 4 do
-                local comp = value[i]
+    elseif type == 'table' and #value == 3 then
+        return VALUE_TYPE_VEC3
+    elseif type == 'table' and #value == 4 then
+        for i = 1, 4 do
+            local comp = value[i]
 
-                if comp > 1 or comp < -1 then
-                    error("invalid quaternion component: " .. comp)
-                end
+            if comp > 1 or comp < -1 then
+                error("invalid quaternion component: " .. comp)
             end
+        end
 
-            return VALUE_TYPE_QUAT
-        else error('invalid array size: ' .. #value) end
+        return VALUE_TYPE_QUAT
     elseif type == 'boolean' then
         return VALUE_TYPE_BOOLEAN
-    else error('invalid value type: ' .. value) end
+    else
+        return VALUE_TYPE_OTHER
+    end
 end
 
 local function analyzeElementSpecial(element, lfaTable)
@@ -477,35 +435,65 @@ local function analyzeElementSpecial(element, lfaTable)
 
     --- interpolation types analyze ---
     if element.type == SCOPE_TYPE or
-       element.type == BONE_TYPE or
        element.type == POSITION_TYPE or
        element.type == ROTATION_TYPE or
        element.type == SCALE_TYPE
     then
-        local function checkInterpAttributes(attributesList, defaultTypes, oppositeTypes, usingScope)
-            for i = 1, #attributesList do
-                local interpAttr = element.attributes[attributesList[i]]
+        local function checkInterpolationType(interpAttr, defaultTypes, oppositeTypes, usingScope)
+            if interpAttr and not table.has(defaultTypes, interpAttr) then
+                local msg = "interpolation '" .. interpAttr .. "' can't be used for " .. usingScope
 
-                if interpAttr and not table.has(defaultTypes, interpAttr) then
-                    local msg = "interpolation '" .. interpAttr .. "' can't be used for " .. usingScope
-
-                    if table.has(oppositeTypes, interpAttr) then
-                        error(msg)
-                    elseif not lfaTable.interps[interpAttr] then
-                        error("unknown interpolation '" .. interpAttr .. "' (maybe custom declared after clip?)")
-                    elseif not table.has(defaultTypes, lfaTable.interps[interpAttr].type) then
-                        error("custom " .. msg)
-                    end
+                if table.has(oppositeTypes, interpAttr) then
+                    error(msg)
+                elseif not lfaTable.interps[interpAttr] then
+                    error("unknown interpolation '" .. interpAttr .. "' (maybe custom declared after clip?)")
+                elseif not table.has(defaultTypes, lfaTable.interps[interpAttr].type) then
+                    error("custom " .. msg)
                 end
             end
         end
 
-        if element.type ~= ROTATION_TYPE then
-            checkInterpAttributes(interpAttributes, defaultInterpTypes, defaultRotationInterpTypes, 'position or scale')
-        end
+        local interpAttr = element.attributes[ATTR_INTERP]
 
-        if element.type ~= POSITION_TYPE and element.type ~= SCALE_TYPE then
-            checkInterpAttributes(rotationInterpAttributes, defaultRotationInterpTypes, defaultInterpTypes, 'rotation')
+        if element.type == SCOPE_TYPE then
+            if interpAttr then
+                local keyedInterpTable = { }
+
+                for i = 1, #interpAttr do
+                    local kv = interpAttr[i]
+
+                    if
+                        type(kv) ~= "table" or
+                        is_array(kv) or
+                        not table.has({ "position", "rotation", "scale" }, kv.key) or
+                        type(kv.value) ~= "string"
+                    then
+                        error("invalid structure of 'interp' attribute in some @scope")
+                    end
+
+                    keyedInterpTable[kv.key] = kv.value
+                end
+
+                for _, interpType in ipairs({
+                    "position", "scale"
+                }) do
+                    checkInterpolationType(keyedInterpTable[interpType],
+                            defaultInterpTypes, defaultRotationInterpTypes, "position or scale"
+                    )
+                end
+
+                checkInterpolationType(keyedInterpTable["rotation"],
+                        defaultRotationInterpTypes, defaultInterpTypes, "rotation"
+                )
+
+                element.attributes[ATTR_INTERP] = keyedInterpTable
+            end
+        else
+            if element.type == ROTATION_TYPE then
+                checkInterpolationType(interpAttr, defaultRotationInterpTypes, defaultInterpTypes, "rotation")
+            else
+                checkInterpolationType(interpAttr, defaultInterpTypes, defaultRotationInterpTypes, "position or scale")
+            end
         end
     end
     --- ---
@@ -594,24 +582,17 @@ local function analyzeElementSpecial(element, lfaTable)
         local attrs = element.attributes
 
         local transformTable = {
-            value = attrs[ATTR_VALUE],
-            interpolation = { }
+            value = attrs[ATTR_VALUE]
         }
 
         if element.type == ROTATION_TYPE then
-            transformTable.interpolation.input = attrs[ATTR_IN_ROTATION_INTERP]
-                    or attrs[ATTR_ROTATION_INTERP]
-                    or tempBone.in_rotation_interp
-
-            transformTable.interpolation.output = attrs[ATTR_OUT_ROTATION_INTERP]
-                    or attrs[ATTR_ROTATION_INTERP]
-                    or tempBone.out_rotation_interp
+            transformTable.interpolation = attrs[ATTR_INTERP]
+                    or tempBone.scopeInterpolation.rotation
                     or INTERP_NLERP
         else
-            transformTable.interpolation.input = attrs[ATTR_IN_INTERP] or attrs[ATTR_INTERP] or tempBone.in_interp
-
-            transformTable.interpolation.output = attrs[ATTR_OUT_INTERP] or attrs[ATTR_INTERP] or tempBone.out_interp
-                                       or INTERP_LERP
+            transformTable.interpolation = attrs[ATTR_INTERP]
+                    or tempBone.scopeInterpolation[element.type == POSITION_TYPE and "position" or "scale"]
+                    or INTERP_LERP
         end
 
         bone[element.type] = transformTable
@@ -633,12 +614,6 @@ local function analyzeElementSpecial(element, lfaTable)
 
         if parentIsSkeleton then
             local errorPrefix = "(bone '" .. name .. "' in skeleton) "
-
-            for i = 1, #allInterpAttributes do
-                if attrs[allInterpAttributes[i]] then
-                    error(errorPrefix .. "bone in skeleton can't have interpolation attributes")
-                end
-            end
 
             if element.children then
                 error(errorPrefix .. "bone in skeleton can't have children")
@@ -672,7 +647,7 @@ local function analyzeElementSpecial(element, lfaTable)
             end
 
             if attrs[ATTR_POSITION] or attrs[ATTR_ROTATION] or attrs[ATTR_SCALE] then
-                error(errorPrefix .. "bone in keyframe can't have transform attributes")
+                error(errorPrefix .. "bone in keyframe can't have direct transform attributes")
             end
 
             keyframe.bones[name] = {
@@ -684,14 +659,7 @@ local function analyzeElementSpecial(element, lfaTable)
             local boneTempTable = {
                 name = name,
 
-                in_interp = attrs[ATTR_IN_INTERP] or attrs[ATTR_INTERP] or parentScope.in_interp,
-                out_interp = attrs[ATTR_OUT_INTERP] or attrs[ATTR_INTERP] or parentScope.out_interp,
-
-                in_rotation_interp = attrs[ATTR_IN_ROTATION_INTERP] or attrs[ATTR_ROTATION_INTERP]
-                        or parentScope.in_rotation_interp,
-
-                out_rotation_interp = attrs[ATTR_OUT_ROTATION_INTERP] or attrs[ATTR_ROTATION_INTERP]
-                        or parentScope.out_rotation_interp,
+                scopeInterpolation = parentScope.interpolation
             }
 
             local boneByTransform = { }
@@ -728,19 +696,20 @@ local function analyzeElementSpecial(element, lfaTable)
         local clip = lfaTable.temp.clipByElement[element]
         local keyframe = lfaTable.temp.keyframeByElement[element]
 
-        local inheritedInterpAttribs = { }
+        local inheritedInterpTypes = { }
 
         local scopeNode = element
 
         while scopeNode.type == SCOPE_TYPE do
-            for i = 1, #allInterpAttributes do
-                local attrName = allInterpAttributes[i]
+            for i = 1, #allTransformChannelNames do
+                local channelName = allTransformChannelNames[i]
 
                 if
-                    scopeNode.attributes[attrName] ~= nil and
-                    not inheritedInterpAttribs[attrName]
+                    scopeNode.attributes[ATTR_INTERP] and
+                    scopeNode.attributes[ATTR_INTERP][channelName] ~= nil and
+                    not inheritedInterpTypes[channelName]
                 then
-                    inheritedInterpAttribs[attrName] = scopeNode.attributes[attrName]
+                    inheritedInterpTypes[channelName] = scopeNode.attributes[ATTR_INTERP][channelName]
                 end
             end
 
@@ -748,14 +717,7 @@ local function analyzeElementSpecial(element, lfaTable)
         end
 
         local scopeTempTable = {
-            in_interp = inheritedInterpAttribs[ATTR_IN_INTERP] or inheritedInterpAttribs[ATTR_INTERP],
-            out_interp = inheritedInterpAttribs[ATTR_OUT_INTERP] or inheritedInterpAttribs[ATTR_INTERP],
-
-            in_rotation_interp = inheritedInterpAttribs[ATTR_IN_ROTATION_INTERP] or
-                    inheritedInterpAttribs[ATTR_ROTATION_INTERP],
-
-            out_rotation_interp = inheritedInterpAttribs[ATTR_OUT_ROTATION_INTERP] or
-                    inheritedInterpAttribs[ATTR_ROTATION_INTERP]
+            interpolation = inheritedInterpTypes
         }
 
         local scopeByBone = { }

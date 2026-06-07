@@ -92,6 +92,7 @@ local function parseAttributeValue(value)
 
         local buffer = ""
         local inQuote = false
+        local bracketsCount = 0
 
         for i = 2, #value do
             local char = value[i]
@@ -100,12 +101,18 @@ local function parseAttributeValue(value)
                 inQuote = not inQuote
             end
 
-            if (char == ',' or char == ')') and not inQuote then
+            if (bracketsCount == 0 and char == ',' or i == #value) and not inQuote then
                 table.insert(values, parseAttributeValue(buffer:trim()))
 
                 buffer = ""
             else
                 buffer = buffer .. char
+            end
+
+            if char == '(' then
+                bracketsCount = bracketsCount + 1
+            elseif char == ')' then
+                bracketsCount = bracketsCount - 1
             end
         end
 
@@ -115,7 +122,16 @@ local function parseAttributeValue(value)
     elseif value == "false" then
         return false
     else
-        error('invalid value: ' .. value)
+        local separatorIndex = value:find(":")
+
+        if separatorIndex and #value > separatorIndex then
+            return {
+                key = value:sub(1, separatorIndex - 1),
+                value = parseAttributeValue(value:sub(separatorIndex + 1, #value):trim())
+            }
+        else
+            error('invalid value: "' .. value .. '"')
+        end
     end
 end
 
@@ -138,7 +154,7 @@ function M.parse(text, offset, hasParent)
     local elementAttributes = { }
 
     local inQuote = false
-    local inBrackets = false
+    local bracketsCount = 0
 
     local length = #text
     local i = offset or 1
@@ -164,7 +180,7 @@ function M.parse(text, offset, hasParent)
             local endOfVal = false
 
             if contains(newLineChars, char) then
-                if inQuote or inBrackets then
+                if inQuote or bracketsCount > 0 then
                     error(i .. ": unexpected new line")
                 else
                     endOfVal = true
@@ -172,7 +188,7 @@ function M.parse(text, offset, hasParent)
             end
 
             if contains(delimiters, char) then
-                if not inQuote and not inBrackets and #buffer > 0 then
+                if not inQuote and bracketsCount == 0 and #buffer > 0 then
                     endOfVal = true
                 end
             end
@@ -190,17 +206,9 @@ function M.parse(text, offset, hasParent)
                     inQuote = not inQuote
                 elseif not inQuote then
                     if char == '(' then
-                        if inBrackets then
-                            error(i .. ": unexpected opening bracket")
-                        end
-
-                        inBrackets = true
+                        bracketsCount = bracketsCount + 1
                     elseif char == ')' then
-                        if not inBrackets then
-                            error(i .. ": unexpected closing bracket")
-                        end
-
-                        inBrackets = false
+                        bracketsCount = bracketsCount - 1
                     end
                 end
 
