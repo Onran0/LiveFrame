@@ -12,17 +12,17 @@ function M.get_object_hash(obj)
 
         table.sort(keys)
 
-        local hash = ''
+        local hash = 0
 
         for i = 1, #keys do
             local key = keys[i]
             local value = obj[key]
 
-            hash = hash .. base64.encode( M.get_object_hash(key) .. M.get_object_hash(value) )
+            hash = bit.bxor(hash, crc32(Bytearray(M.get_object_hash(key) .. M.get_object_hash(value))))
         end
 
-        return hash
-    else return tostring(obj) end
+        return "crc32_" .. hash
+    else return "crc32_" .. crc32(Bytearray(tostring(obj))) end
 end
 
 return M
