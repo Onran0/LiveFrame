@@ -17,7 +17,7 @@
 local util = require "util/util"
 
 local loaders = {
-    lfa = {
+    ["lfa"] = {
         binary = false,
         func = require("lfa/loader").load
     }
