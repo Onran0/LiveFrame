@@ -286,7 +286,7 @@ local allParameterTypes = {
     "trigger"
 }
 
-local loader = require "engine/clips/loader"
+local loader = require "engine/loader"
 local clips_meta_combiner = require "engine/clips/meta_combiner"
 local timer = require "engine/timer"
 

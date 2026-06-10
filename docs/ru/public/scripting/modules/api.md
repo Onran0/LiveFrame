@@ -27,16 +27,17 @@ function(eventValue: any, clipName: string, clipObject: table)
 end
 ```
 
-## Создание аниматора
+## Загрузка аниматора
 
 Возвращает [animator](../classes/animator.md).
 
 ```lua
-api.create_animator(
-        -- путь к файлу с описанием аниматора
-        filePath: string,
+api.load_animator(
         -- целевой скелет сущности, на который будут применяться трансформации
-        skeleton: table
+        skeleton: table,
+        
+        -- путь к файлу с описанием аниматора
+        filePath: string
 ) -> animator
 ```
 
@@ -44,7 +45,7 @@ api.create_animator(
 ```lua
 local liveframe = require "liveframe:api"
 
-local animator = liveframe.create_animator(
+local animator = liveframe.load_animator(
         entity.skeleton,
         "packid:animators/some_entity.json"
 )
@@ -123,3 +124,25 @@ player:play("walk_2")
 > [!WARNING]
 > Обратите внимание на то, что вам придется вручную каждый кадр вызывать `player:step(delta)`
 > или `animator:step(delta)`, так как созданный проигрыватель/загрузчик не привязан к компоненту.
+
+
+# Загрузка модели
+
+Возвращает имя скелета с костями и моделью.
+
+```lua
+api.load_model(
+        -- целевая сущность, на которую автоматически будет применён скелет
+        entity: table,
+        
+        -- путь к файлу с моделью и скелетом
+        filePath: string,
+        
+        -- дополнительные настройки для загрузчика модели
+        [опционально] loadSettings: table
+) -> string
+```
+
+> [!NOTE]
+> На данный момент ни один поддерживаемый формат не поддерживает модели.
+> Эта функция - задел на будущую поддержку **glTF** и **glB**.

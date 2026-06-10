@@ -14,7 +14,7 @@
    limitations under the License.
 ]]--
 
-local loader = require "engine/clips/loader"
+local loader = require "engine/loader"
 local sampler = require "engine/clips/sampler"
 
 local player = require "engine/clips/player"
@@ -35,7 +35,23 @@ local function loadClipsMetadata(filePath, loadSettings)
     return val
 end
 
-function M.create_animator(skeleton, filePath)
+function M.load_model(entity, filePath, loadSettings)
+    local status, clipsMetadataOrError, skeletonName = pcall(loader.load_from_path, filePath, loadSettings)
+
+    if not status then
+        error("failed to load model file '" .. filePath .. "': " .. clipsMetadataOrError)
+    end
+
+    if not skeletonName then
+        error("failed to load model from file '" .. filePath .. "'. maybe this format is not supporting models?")
+    end
+
+    entity:set_skeleton(skeletonName)
+
+    return skeletonName
+end
+
+function M.load_animator(skeleton, filePath)
     local status, res = pcall(animator_loader.load, file.read(filePath))
 
     if not status then

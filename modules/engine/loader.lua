@@ -14,6 +14,8 @@
    limitations under the License.
 ]]--
 
+local util = require "util/util"
+
 local loaders = {
     lfa = {
         binary = false,
@@ -25,9 +27,21 @@ local loadSettingsAliases = {
     relativizeTransforms = "relativize-transforms"
 }
 
+local cache = { }
+
 local M = { }
 
-function M.load_from_path(filePath, loadSettings)
+function M.load_from_path(filePath, loadSettings, noCache)
+    local loadSettingsHash
+
+    if not noCache then
+       loadSettingsHash = util.get_object_hash(loadSettings)
+
+        if cache[filePath] and cache[filePath][loadSettingsHash] then
+            return unpack(cache[filePath][loadSettingsHash])
+        end
+    end
+
     local ext = file.ext(filePath)
 
     local loader = loaders[ext]
@@ -45,7 +59,36 @@ function M.load_from_path(filePath, loadSettings)
         end
     end
 
-    return loader.func(loader.binary and file.read_bytes(filePath) or file.read(filePath), loadSettings or { })
+    local result = { loader.func(loader.binary and file.read_bytes(filePath) or file.read(filePath), loadSettings or { }) }
+
+    if not noCache then
+        local fileCaches = cache[filePath]
+
+        if not fileCaches then
+            fileCaches = { }
+            cache[filePath] = fileCaches
+        end
+
+        fileCaches[loadSettingsHash] = result
+    end
+
+    return unpack(result)
+end
+
+function M.remove_from_cache(filePath, loadSettings)
+    if cache[filePath] then
+        if loadSettings ~= nil then
+            local hash = util.get_object_hash(loadSettings)
+
+            if cache[filePath][hash] then
+                cache[filePath][hash] = nil
+                return true
+            else return false end
+        else
+            cache[filePath] = nil
+            return true
+        end
+    else return false end
 end
 
 function M.get_load_function_by_extension(ext)
