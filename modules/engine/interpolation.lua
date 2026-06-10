@@ -28,6 +28,18 @@ local function quatNlerp(a, b, t)
     })
 end
 
+local function hermiteBasis(t)
+    local t2 = t * t
+    local t3 = t2 * t
+
+    local h00 =  2 * t3 - 3 * t2 + 1
+    local h10 =  t3 - 2 * t2 + t
+    local h01 = -2 * t3 + 3 * t2
+    local h11 = t3 - t2
+
+    return h00, h10, h01, h11
+end
+
 local function squadSlerp(q1, q2, t)
     local dot = math.clamp(quat_math.dot(q1, q2), -1, 1)
 
@@ -58,27 +70,35 @@ M.functions = {
             math_util.lerp(a[3], b[3], t)
         }
     end,
+
     ["cubic-spline"] = function(a, b, t, inTangent, outTangent)
-        local t2 = t * t
-        local t3 = t2 * t
+        local h00, h10, h01, h11 = hermiteBasis(t)
 
-        -- Hermite basis functions
-        local h00 =  2 * t3 - 3 * t2 + 1
-        local h10 =  t3 - 2 * t2 + t
-        local h01 = -2 * t3 + 3 * t2
-        local h11 = t3 - t2
+        if #a == 3 then
+            return
+            vec3.add(
+                    vec3.add(
+                            vec3.mul(a, h00),
+                            vec3.mul(outTangent, h10)
+                    ),
+                    vec3.add(
+                            vec3.mul(b, h01),
+                            vec3.mul(inTangent, h11)
+                    )
+            )
+        else
+            local q = {}
 
-        return
-        vec3.add(
-                vec3.add(
-                        vec3.mul(a, h00),
-                        vec3.mul(outTangent, h10)
-                ),
-                vec3.add(
-                        vec3.mul(b, h01),
-                        vec3.mul(inTangent, h11)
-                )
-        )
+            for i=1,4 do
+                q[i] =  h00 * a[i]
+                        + h10 * outTangent[i]
+                        + h01 * b[i]
+                        + h11 * inTangent[i]
+
+            end
+
+            return quat_math.normalize(q)
+        end
     end,
 
     nlerp = quatNlerp,
