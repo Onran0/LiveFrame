@@ -1,5 +1,7 @@
 # LFA
 
+<sup>[**Плагин для Blockbench для экспорта анимаций в LFA**](https://github.com/Onran0/LiveFrame-BBPlugin)</sup>
+
 **LFA** (LiveFrame Animation) - текстовый формат
 описания анимаций для скелетов **VoxelCore**, использующийся
 контент-паком **LiveFrame**.
