@@ -121,6 +121,15 @@ result format:
 ]]--
 
 local constants = require "engine/animator/constants"
+local conditions_loader = require "engine/animator/conditions_loader"
+
+local CURRENT_VERSION = "1.0"
+
+local SUPPORTED_VERSIONS = {
+    CURRENT_VERSION
+}
+
+local FIELD_VERSION = "version"
 
 local FIELD_CLIPS = "clips"
 local FIELD_ID = "id"
@@ -151,6 +160,7 @@ local FIELD_DURATION = "duration"
 local FIELD_EXIT_TIME = "exit-time"
 local FIELD_BLEND_CURVE = "blend-curve"
 local FIELD_CONDITION = "condition"
+local FIELD_CONDITIONS = "conditions"
 
 local STATE_TYPE_CLIP = "clip"
 local TRANSITION_BLEND_CURVE_LINEAR = "linear"
@@ -244,19 +254,21 @@ local structures = {
             [FIELD_DURATION] = luaType("number"),
             [FIELD_EXIT_TIME] = luaType("number"),
             [FIELD_BLEND_CURVE] = luaType("string"),
-            [FIELD_CONDITION] = luaType("string")
+            [FIELD_CONDITION] = luaType("string"),
+            [FIELD_CONDITIONS] = arrayOf(luaType("string"))
         },
-        requiredFields = { FIELD_FROM, FIELD_TO, FIELD_DURATION}
+        requiredFields = { FIELD_FROM, FIELD_TO, FIELD_DURATION }
     },
 
     root = {
         fields = {
+            [FIELD_VERSION] = luaType("string"),
             [FIELD_CLIPS] = arrayOf(structureType("clipsFile")),
             [FIELD_PARAMETERS] = arrayOf(structureType("parameter")),
             [FIELD_LAYERS] = arrayOf(structureType("layer"))
         },
 
-        requiredFields = { FIELD_CLIPS, FIELD_LAYERS }
+        requiredFields = { FIELD_VERSION, FIELD_CLIPS, FIELD_LAYERS }
     }
 }
 
@@ -405,6 +417,17 @@ local function loadFromTable(animatorTable)
         error("invalid file structure: " .. table.concat(inconsistencies, "; "))
     end
 
+    local version = animatorTable[FIELD_VERSION]
+
+    if not table.has(SUPPORTED_VERSIONS, version) then
+        error(
+                "animator version '" .. version .. "' is not supported by this loader. max supported: "
+                        .. CURRENT_VERSION
+        )
+    end
+
+    version = tonumber(version)
+
     local clipsMetadataArray = { }
     local clipsMetadataIndices = { }
     local overrideClipsNames = { }
@@ -417,7 +440,7 @@ local function loadFromTable(animatorTable)
 
     local affectedBonesByClips = { }
 
-    local conditionsPrefix = "local "
+    local conditionsParams = { }
 
     for _, fileInfo in ipairs(animatorTable[FIELD_CLIPS]) do
         if table.has(clipsMetadataIndices, fileInfo[FIELD_ID]) then
@@ -451,11 +474,15 @@ local function loadFromTable(animatorTable)
             parametersTypes[parameter.name] = parameterTypeToIndex[parameter.type]
             parametersIndices[parameter.name] = index
 
-            conditionsPrefix = conditionsPrefix .. parameter.name .. ", "
+            table.insert(conditionsParams, parameter)
         end
     end
 
-    conditionsPrefix = conditionsPrefix .. "t = ...; return "
+    -- normalized state time parameter (t)
+    table.insert(conditionsParams, {
+        name = "t",
+        type = "number"
+    })
 
     local layersNames = { }
 
@@ -549,13 +576,29 @@ local function loadFromTable(animatorTable)
 
         if layer[FIELD_TRANSITIONS] then
             for _, transition in ipairs(layer[FIELD_TRANSITIONS]) do
-                local conditionFunc, err = load(conditionsPrefix .. transition[FIELD_CONDITION])
+                local conditionFunc
 
-                if err then
-                    error(
-                            "failed to compile transition condition '" .. transition[FIELD_CONDITION] .. "' in layer '"
-                                    .. layer[FIELD_NAME] .. "': " .. err
+                if transition[FIELD_CONDITION] or transition[FIELD_CONDITIONS] then
+                    if transition[FIELD_CONDITION] and transition[FIELD_CONDITIONS] then
+                        error(
+                                "transition can't have defined 'condition' and 'conditions' properties together. layer '"
+                                        .. layer[FIELD_NAME] .. "'"
+                        )
+                    end
+
+                    local luaExpr, err
+
+                    luaExpr, conditionFunc, err = conditions_loader.load(
+                            conditionsParams,
+                            transition[FIELD_CONDITION] or transition[FIELD_CONDITIONS]
                     )
+
+                    if err then
+                        error(
+                                "failed to compile transition condition(-s) '" .. luaExpr .. "' in layer '"
+                                        .. layer[FIELD_NAME] .. "': " .. err
+                        )
+                    end
                 end
 
                 local toState = transition[FIELD_TO]
