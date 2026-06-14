@@ -40,6 +40,12 @@ local function hermiteBasis(t)
     return h00, h10, h01, h11
 end
 
+local function singleCubicSpline(a, b, t, inTangent, outTangent)
+    local h00, h10, h01, h11 = hermiteBasis(t)
+
+    return a * h00 + outTangent * h10 + b * h01 + inTangent * h11
+end
+
 local function squadSlerp(q1, q2, t)
     local dot = math.clamp(quat_math.dot(q1, q2), -1, 1)
 
@@ -128,5 +134,7 @@ M.customFieldsIndices = {
         "out-control"
     }
 }
+
+M.single_cubic_spline = singleCubicSpline
 
 return M
