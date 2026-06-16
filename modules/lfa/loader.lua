@@ -45,8 +45,8 @@ output table format:
     -- sets order for array in third field in transform keys
     interpFieldsIndices = {
         ["cubic-spline"] = {
-            "in-tangent",
-            "out-tangent"
+            "start-tangent",
+            "end-tangent"
         }
     },
 
@@ -151,27 +151,38 @@ local analyzer = require "lfa/analyzer"
 
 local place_default_bones_transforms = require "util/place_default_bones_transforms"
 
-local function getControlQuat(keys, index)
-    local k_curr = keys[index]
+local function getKeyDataForAutoCalculation(keys, duration, loop, index)
+    local k
 
-    if not k_curr then return quat_math.idt() end
-
-    local k_prev = keys[index - 1]
-    local k_next = keys[index + 1]
-
-    local t_curr = k_curr[constants.KEY_TIME_INDEX]
-    local t_prev, t_next
-
-    if not k_prev then
-        return quat_math.idt()
+    if not loop or index >= 1 and index <= #keys then
+        k = keys[index]
     else
-        t_prev = k_prev[constants.KEY_TIME_INDEX]
+        if #keys > 2 then
+            if index == #keys + 1 then
+                local key = keys[2]
+
+                return
+                keys[#keys][constants.KEY_TIME_INDEX] +
+                        (key[constants.KEY_TIME_INDEX] - keys[1][constants.KEY_TIME_INDEX]),
+                key[constants.KEY_VALUE_INDEX]
+            elseif index == 0 then
+                local key = keys[#keys - 1]
+
+                return keys[1][constants.KEY_TIME_INDEX] - (duration - key[constants.KEY_TIME_INDEX]), key[constants.KEY_VALUE_INDEX]
+            else return end
+        else return end
     end
 
-    if not k_next then
+    return k[constants.KEY_TIME_INDEX], k[constants.KEY_VALUE_INDEX]
+end
+
+local function getSquadControlQuat(keys, index, duration, loop)
+    local t_prev, q_prev = getKeyDataForAutoCalculation(keys, duration, loop, index - 1)
+    local t_curr, q_curr = getKeyDataForAutoCalculation(keys, duration, loop, index)
+    local t_next, q_next = getKeyDataForAutoCalculation(keys, duration, loop, index + 1)
+
+    if not q_prev or not q_curr or not q_next then
         return quat_math.idt()
-    else
-        t_next = k_next[constants.KEY_TIME_INDEX]
     end
 
     local dt1 = t_curr - t_prev
@@ -179,10 +190,6 @@ local function getControlQuat(keys, index)
 
     if dt1 <= 0 then dt1 = 1.0 end
     if dt2 <= 0 then dt2 = 1.0 end
-
-    local q_curr = k_curr[constants.KEY_VALUE_INDEX]
-    local q_prev = k_prev[constants.KEY_VALUE_INDEX]
-    local q_next = k_next[constants.KEY_VALUE_INDEX]
 
     if quat_math.dot(q_prev, q_curr) < 0 then q_prev = quat_math.negate(q_prev) end
     if quat_math.dot(q_next, q_curr) < 0 then q_next = quat_math.negate(q_next) end
@@ -218,63 +225,64 @@ local function getControlQuat(keys, index)
     )
 end
 
+local function getHermiteTangentsByCatmullrom(keys, index, duration, loop)
+    local t_prev, p_prev = getKeyDataForAutoCalculation(keys, duration, loop, index - 1)
+    local t_curr, p_curr = getKeyDataForAutoCalculation(keys, duration, loop, index)
+    local t_next, p_next = getKeyDataForAutoCalculation(keys, duration, loop, index + 1)
+
+    local inTangent, outTangent = { 0, 0, 0 }, { 0, 0, 0}
+
+    if p_prev and p_next then
+        local dt = t_next - t_prev
+        if dt > 0 then
+            local tangent = vec3.div(vec3.sub(p_next, p_prev), dt)
+
+            local d1 = vec3.sub(p_curr, p_prev)
+            local d2 = vec3.sub(p_next, p_curr)
+
+            if vec3.dot(d1, d2) <= 0 then
+                tangent = { 0, 0, 0 }
+            end
+
+            inTangent = tangent
+            outTangent = tangent
+        end
+    elseif p_prev then
+        local dt = t_curr - t_prev
+        if dt > 0 then
+            inTangent = vec3.div(vec3.sub(p_curr, p_prev), dt)
+        end
+    elseif p_next then
+        local dt = t_next - t_curr
+        if dt > 0 then
+            outTangent = vec3.div(vec3.sub(p_next, p_curr), dt)
+        end
+    end
+
+    return { inTangent, outTangent }
+end
+
 local autoComputeInterpsTypes = {
-    [analyzer.interpCubicSpline] = function(keys, index)
-        local k_prev = keys[index - 1]
-        local k_curr = keys[index]
-        local k_next = keys[index + 1]
+    [analyzer.interpCubicSpline] = function(keys, index, duration, loop)
+        local t_curr = getKeyDataForAutoCalculation(keys, duration, loop, index)
+        local t_next = getKeyDataForAutoCalculation(keys, duration, loop, index + 1)
 
-        if not k_curr or not k_prev or not k_next then
-            return { ["in-tangent"] = {0,0,0}, ["out-tangent"] = {0,0,0} }
+        if not t_next then
+            return { ["start-tangent"] = { 0, 0, 0 }, ["end-tangent"] = { 0, 0, 0 } }
         end
 
-        local t_curr = k_curr[constants.KEY_TIME_INDEX]
-        local t_prev, t_next
+        local startTangent = getHermiteTangentsByCatmullrom(keys, index, duration, loop)[2]
+        local endTangent = getHermiteTangentsByCatmullrom(keys, index + 1, duration, loop)[1]
 
-        local p_prev = k_prev and k_prev[constants.KEY_VALUE_INDEX]
-        local p_curr = k_curr[constants.KEY_VALUE_INDEX]
-        local p_next = k_next and k_next[constants.KEY_VALUE_INDEX]
+        -- tangents normalization
+        local dt = t_next - t_curr
 
-        t_prev = t_prev or (k_prev and k_prev[constants.KEY_TIME_INDEX])
-        t_next = t_next or (k_next and k_next[constants.KEY_TIME_INDEX])
-
-        local inTangent  = {0,0,0}
-        local outTangent = {0,0,0}
-
-        if p_prev then
-            local dt = t_curr - t_prev
-            if dt > 0 then
-                inTangent = vec3.div(vec3.sub(p_curr, p_prev), dt)
-            end
-        end
-
-        if p_next then
-            local dt = t_next - t_curr
-            if dt > 0 then
-                outTangent = vec3.div(vec3.sub(p_next, p_curr), dt)
-            end
-        end
-
-        if p_prev and p_next then
-            local dt = t_next - t_prev
-            if dt > 0 then
-                local tangent = vec3.div(vec3.sub(p_next, p_prev), dt)
-
-                local d1 = vec3.sub(p_curr, p_prev)
-                local d2 = vec3.sub(p_next, p_curr)
-
-                if vec3.dot(d1, d2) <= 0 then
-                    tangent = {0,0,0}
-                end
-
-                inTangent  = tangent
-                outTangent = tangent
-            end
-        end
+        startTangent = vec3.mul(startTangent, dt)
+        endTangent = vec3.mul(endTangent, dt)
 
         return {
-            ["in-tangent"] = inTangent,
-            ["out-tangent"] = outTangent
+            ["start-tangent"] = startTangent,
+            ["end-tangent"] = endTangent
         }
     end,
 
@@ -286,8 +294,8 @@ local autoComputeInterpsTypes = {
         end
 
         return {
-            ["in-control"] = getControlQuat(keys, index),
-            ["out-control"] = getControlQuat(keys, nextInd)
+            ["start-control"] = getSquadControlQuat(keys, index, duration, loop),
+            ["end-control"] = getSquadControlQuat(keys, nextInd, duration, loop)
         }
     end
 }
@@ -363,8 +371,10 @@ local function loadFromTable(lfaTable, loadSettings)
     local function getInterpTypeAndFields(
             rawType, -- possibly a custom interp id, as well as a default interp type
             base, -- base for fields relativization (for rotation is inverted for higher load speed)
+            keyTime, -- key time
             keyVal, -- value of key (may relativized),
-            keyType
+            keyType,
+            nextKeyTime -- next key time (may be nil)
     )
         if not table.has(analyzer.allDefaultInterpTypes, rawType) then
             local customId = rawType
@@ -389,6 +399,11 @@ local function loadFromTable(lfaTable, loadSettings)
                     elseif type == analyzer.interpCubicSpline and keyType == KEY_TYPE_SCALE then
                         value = vec3.div(value, base)
                     end
+                end
+
+                -- hermit tangents normalization
+                if type == analyzer.interpCubicSpline and nextKeyTime then
+                    value = vec3.mul(value, nextKeyTime - keyTime)
                 end
 
                 plainFields[table.index(fieldsIndices, name)] = value
@@ -421,8 +436,19 @@ local function loadFromTable(lfaTable, loadSettings)
         local affectedBones = { }
         local events = { }
 
-        for _, keyframe in ipairs(lfaClip.keyframes) do
+        local keyframes = lfaClip.keyframes
+
+        for i = 1, #keyframes do
+            local keyframe = keyframes[i]
+            local nextKeyframe = keyframes[i + 1]
+
             local time = keyframe.time
+
+            local nextTime
+
+            if nextKeyframe then
+                nextTime = nextKeyframe.time
+            end
 
             for _, event in ipairs(keyframe.events) do
                 table.insert(events, {
@@ -464,7 +490,7 @@ local function loadFromTable(lfaTable, loadSettings)
                 local function addToKeys(keys, transform, value, base, keyType)
                     local type, fields
 
-                    type, fields = getInterpTypeAndFields(transform.interpolation, base, value, keyType)
+                    type, fields = getInterpTypeAndFields(transform.interpolation, base, time, value, keyType, nextTime)
 
                     table.insert(keys, {
                         value,
@@ -477,6 +503,7 @@ local function loadFromTable(lfaTable, loadSettings)
 
                 if bonePosition then
                     addInterpTypes(bonePosition)
+
                     addToKeys(
                             positionKeys, bonePosition,
                             relativizeTransforms and

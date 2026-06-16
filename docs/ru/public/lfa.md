@@ -410,32 +410,39 @@
 
 **Поля для `cubic-spline`**
 
-- `in-tangent` - вектор, описывающий направление и скорость изменения значения при входе в ключ-кадр.
-- `out-tangent` - вектор, описывающий направление и скорость изменения значения при выходе из ключ-кадра.
+- `start-tangent` - вектор, описывающий направление и скорость изменения значения при выходе из текущего ключ-кадра;
+- `end-tangent` - вектор, описывающий направление и скорость изменения значения при входе в следующий ключ-кадр.
 
-***Пример***
+***Примеры***
 
+**Для позиции и масштаба:**
 ```
 @interp id "custom-interp" type "cubic-spline" {
-    @field name "in-tangent" value (0,3,1)
-    @field name "out-tangent" value (3,3,1)
+    @field name "start-tangent" value (3,3,1)
+    @field name "end-tangent" value (0,3,1)
+}
+```
+
+**Для вращения:**
+```
+@interp id "custom-interp" type "cubic-spline" {
+    @field name "start-tangent" value (0,0.5,0,0.5)
+    @field name "end-tangent" value (0.25,0.25,0.25,0.25)
 }
 ```
 
 **Поля для `squad`**
 
-- `in-control` - вспомогательный кватернион, определяющий кривизну траектории при входе в данную точку. 
-Влияет на форму сегмента перед этим ключ-кадром;
+- `start-control` - контрольный кватернион, определяющий кривизну траектории при выходе из текущего ключ-кадра;
 
-- `out-control` - вспомогательный кватернион, определяющий кривизну траектории при выходе из данной точки. 
-Влияет на форму сегмента после этого ключ-кадра.
+- `end-control` - вспомогательный кватернион, определяющий кривизну траектории при входе в следующий ключ-кадр;
 
 ***Пример***
 
 ```
 @interp id "custom-interp" type "squad" {
-    @field name "in-control" value (0,0.5,0,0.5)
-    @field name "out-control" value (0.25,0.25,0.25,0.25)
+    @field name "start-control" value (0,0.5,0,0.5)
+    @field name "end-control" value (0.25,0.25,0.25,0.25)
 }
 ```
 
@@ -454,7 +461,7 @@
 
 ```
 ... {
-    @field name "in-tangent" value (0,3,1)
-    @field name "out-tangent" value (3,3,1)
+    @field name "start-tangent" value (3,3,1)
+    @field name "end-tangent" value (0,3,1)
 }
 ```

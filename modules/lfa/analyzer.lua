@@ -48,8 +48,8 @@ output lfaTable structure:
             id = "custom",
             type = "squad",
             fields = {
-                ["in-control"] = { 0, -1, 0, 1 },
-                ["out-control"] = { 0, -1, 0, 1 }
+                ["start-control"] = { 0, -1, 0, 1 },
+                ["end-control"] = { 0, -1, 0, 1 }
             }
         }
     },
@@ -176,11 +176,11 @@ local INTERP_STEP = "step"
 
 -- fields of customizable interpolation types
 
-local CUBIC_SPLINE_IN_TANGENT = "in-tangent"
-local CUBIC_SPLINE_OUT_TANGENT = "out-tangent"
+local CUBIC_SPLINE_START_TANGENT = "start-tangent"
+local CUBIC_SPLINE_END_TANGENT = "end-tangent"
 
-local SQUAD_IN_CONTROL = "in-control"
-local SQUAD_OUT_CONTROL = "out-control"
+local SQUAD_START_CONTROL = "start-control"
+local SQUAD_END_CONTROL = "end-control"
 
 -- elements types array
 
@@ -323,12 +323,12 @@ local allowedCustomizableInterpTypes = {
 
 local requiredCustomizableInterpTypesFields = {
     [INTERP_CUBIC_SPLINE] = {
-        [CUBIC_SPLINE_IN_TANGENT] = VALUE_TYPE_VEC3,
-        [CUBIC_SPLINE_OUT_TANGENT] = VALUE_TYPE_VEC3
+        [CUBIC_SPLINE_END_TANGENT] = VALUE_TYPE_VEC3,
+        [CUBIC_SPLINE_START_TANGENT] = VALUE_TYPE_VEC3
     },
     [INTERP_SQUAD] = {
-        [SQUAD_IN_CONTROL] = VALUE_TYPE_QUAT,
-        [SQUAD_OUT_CONTROL] = VALUE_TYPE_QUAT
+        [SQUAD_END_CONTROL] = VALUE_TYPE_QUAT,
+        [SQUAD_START_CONTROL] = VALUE_TYPE_QUAT
     }
 }
 

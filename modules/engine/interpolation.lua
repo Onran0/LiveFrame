@@ -77,7 +77,7 @@ M.functions = {
         }
     end,
 
-    ["cubic-spline"] = function(a, b, t, inTangent, outTangent)
+    ["cubic-spline"] = function(a, b, t, startTangent, endTangent)
         local h00, h10, h01, h11 = hermiteBasis(t)
 
         if #a == 3 then
@@ -85,11 +85,11 @@ M.functions = {
             vec3.add(
                     vec3.add(
                             vec3.mul(a, h00),
-                            vec3.mul(outTangent, h10)
+                            vec3.mul(startTangent, h10)
                     ),
                     vec3.add(
                             vec3.mul(b, h01),
-                            vec3.mul(inTangent, h11)
+                            vec3.mul(endTangent, h11)
                     )
             )
         else
@@ -97,9 +97,9 @@ M.functions = {
 
             for i=1,4 do
                 q[i] =  h00 * a[i]
-                        + h10 * outTangent[i]
+                        + h10 * startTangent[i]
                         + h01 * b[i]
-                        + h11 * inTangent[i]
+                        + h11 * endTangent[i]
 
             end
 
@@ -111,10 +111,10 @@ M.functions = {
 
     slerp = quat.slerp,
 
-    squad = function(a, b, t, inControl, outControl)
+    squad = function(a, b, t, startControl, endControl)
         return squadSlerp(
                 squadSlerp(a, b, t),
-                squadSlerp(inControl, outControl, t),
+                squadSlerp(startControl, endControl, t),
                 2 * t * (1 - t)
         )
     end,
@@ -126,12 +126,12 @@ M.functions = {
 
 M.customFieldsIndices = {
     ["cubic-spline"] = {
-        "in-tangent",
-        "out-tangent"
+        "start-tangent",
+        "end-tangent"
     },
     squad = {
-        "in-control",
-        "out-control"
+        "start-control",
+        "end-control"
     }
 }
 
