@@ -31,16 +31,23 @@ function M:new(clipsMetadata)
 
     local fromLocalInterpFieldsIndexToGlobal = { }
 
-    for interpType, interpFields in pairs(clipsMetadata.interpFieldsIndices) do
-        local t = { }
+    for interpType, interpTargets in pairs(clipsMetadata.interpFieldsIndices) do
 
-        for i, interpField in ipairs(interpFields) do
-            t[i] = table.index(interpolation.customFieldsIndices[interpType], interpField)
+        local targetToFields = { }
+
+        for interpTargetId, interpFields in pairs(interpTargets) do
+            local mappedFields = { }
+
+            for i, interpField in ipairs(interpFields) do
+                mappedFields[i] = table.index(interpolation.customFieldsIndices[interpType], interpField)
+            end
+
+            targetToFields[interpTargetId] = mappedFields
         end
 
         fromLocalInterpFieldsIndexToGlobal[
             table.index(clipsMetadata.interpTypesIndices, interpType)
-        ] = t
+        ] = targetToFields
     end
 
     local interpIndexToFunc = { }
@@ -55,11 +62,11 @@ function M:new(clipsMetadata)
     return obj
 end
 
-function M:__map_interp_fields(interpTypeIndex, keyFields)
+function M:__map_interp_fields(interpTypeIndex, interpTargetId, keyFields)
     local resultFields = { }
 
     for i = 1, #keyFields do
-        resultFields[self.fromLocalInterpFieldsIndexToGlobal[interpTypeIndex][i]] = keyFields[i]
+        resultFields[self.fromLocalInterpFieldsIndexToGlobal[interpTypeIndex][interpTargetId][i]] = keyFields[i]
     end
 
     return unpack(resultFields)
@@ -147,10 +154,12 @@ function M:get_bone_transform_sample(boneIndex, currentTime, clipIndex, returnTa
                 local value
 
                 if self.fromLocalInterpFieldsIndexToGlobal[interpTypeIndex] then
+                    local interpTargetId = i == 3 and constants.TARGET_QUAT or constants.TARGET_VEC3
+
                     value = interpFunc(
                             keyFrom[constants.KEY_VALUE_INDEX], keyTo[constants.KEY_VALUE_INDEX], factor,
                             self:__map_interp_fields(
-                                    interpTypeIndex, keyFrom[constants.KEY_INTERP_FIELDS_INDEX]
+                                    interpTypeIndex, interpTargetId, keyFrom[constants.KEY_INTERP_FIELDS_INDEX]
                             )
                     )
                 else

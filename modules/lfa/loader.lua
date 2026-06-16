@@ -45,8 +45,10 @@ output table format:
     -- sets order for array in third field in transform keys
     interpFieldsIndices = {
         ["cubic-spline"] = {
-            "start-tangent",
-            "end-tangent"
+            [1] = { -- 1 means TARGET_VEC3 (check general_constants)
+                "start-tangent",
+                "end-tangent"
+            }
         }
     },
 
@@ -148,6 +150,14 @@ local quat_math = require "util/math/quat_math"
 
 local structure_parser = require "lfa/structure_parser"
 local analyzer = require "lfa/analyzer"
+
+local TYPE_VEC3 = analyzer.VALUE_TYPE_VEC3
+local TYPE_QUAT = analyzer.VALUE_TYPE_QUAT
+
+local literalTargetToId = {
+    [TYPE_VEC3] = constants.TARGET_VEC3,
+    [TYPE_QUAT] = constants.TARGET_QUAT
+}
 
 local place_default_bones_transforms = require "util/place_default_bones_transforms"
 
@@ -263,41 +273,45 @@ local function getHermiteTangentsByCatmullrom(keys, index, duration, loop)
 end
 
 local autoComputeInterpsTypes = {
-    [analyzer.interpCubicSpline] = function(keys, index, duration, loop)
-        local t_curr = getKeyDataForAutoCalculation(keys, duration, loop, index)
-        local t_next = getKeyDataForAutoCalculation(keys, duration, loop, index + 1)
+    [analyzer.interpCubicSpline] = {
+        [TYPE_VEC3] = function(keys, index, duration, loop)
+            local t_curr = getKeyDataForAutoCalculation(keys, duration, loop, index)
+            local t_next = getKeyDataForAutoCalculation(keys, duration, loop, index + 1)
 
-        if not t_next then
-            return { ["start-tangent"] = { 0, 0, 0 }, ["end-tangent"] = { 0, 0, 0 } }
+            if not t_next then
+                return { ["start-tangent"] = { 0, 0, 0 }, ["end-tangent"] = { 0, 0, 0 } }
+            end
+
+            local startTangent = getHermiteTangentsByCatmullrom(keys, index, duration, loop)[2]
+            local endTangent = getHermiteTangentsByCatmullrom(keys, index + 1, duration, loop)[1]
+
+            -- tangents normalization
+            local dt = t_next - t_curr
+
+            startTangent = vec3.mul(startTangent, dt)
+            endTangent = vec3.mul(endTangent, dt)
+
+            return {
+                ["start-tangent"] = startTangent,
+                ["end-tangent"] = endTangent
+            }
         end
+    },
 
-        local startTangent = getHermiteTangentsByCatmullrom(keys, index, duration, loop)[2]
-        local endTangent = getHermiteTangentsByCatmullrom(keys, index + 1, duration, loop)[1]
+    [analyzer.interpSquad] = {
+        [TYPE_QUAT] = function(keys, index, duration, loop)
+            local nextInd = index + 1
 
-        -- tangents normalization
-        local dt = t_next - t_curr
+            if loop and not keys[nextInd] then
+                nextInd = 1
+            end
 
-        startTangent = vec3.mul(startTangent, dt)
-        endTangent = vec3.mul(endTangent, dt)
-
-        return {
-            ["start-tangent"] = startTangent,
-            ["end-tangent"] = endTangent
-        }
-    end,
-
-    [analyzer.interpSquad] = function(keys, index, duration, loop)
-        local nextInd = index + 1
-
-        if loop and not keys[nextInd] then
-            nextInd = 1
+            return {
+                ["start-control"] = getSquadControlQuat(keys, index, duration, loop),
+                ["end-control"] = getSquadControlQuat(keys, nextInd, duration, loop)
+            }
         end
-
-        return {
-            ["start-control"] = getSquadControlQuat(keys, index, duration, loop),
-            ["end-control"] = getSquadControlQuat(keys, nextInd, duration, loop)
-        }
-    end
+    }
 }
 
 local M = { }
@@ -323,6 +337,8 @@ local function eulerToQuat(euler, order)
 end
 
 local function loadFromTable(lfaTable, loadSettings)
+    debug.print(lfaTable)
+
     local interpTypesIndices = { }
     local interpFieldsIndices = { }
     local bonesIndices = { }
@@ -350,19 +366,25 @@ local function loadFromTable(lfaTable, loadSettings)
 
     local clips = { }
 
-    local function createOrGetInterpFieldsIndices(type)
+    local function createOrGetInterpFieldsIndices(type, target)
+        local targetId = literalTargetToId[target]
+
         local fieldsIndices
 
         if not interpFieldsIndices[type] then
+            interpFieldsIndices[type] = { }
+        end
+
+        if not interpFieldsIndices[type][targetId] then
             fieldsIndices = { }
 
-            for name, _ in pairs(analyzer.requiredCustomizableInterpTypesFields[type]) do
+            for name, _ in pairs(analyzer.requiredCustomizableInterpTypesFields[type][target]) do
                 table.insert(fieldsIndices, name)
             end
 
-            interpFieldsIndices[type] = fieldsIndices
+            interpFieldsIndices[type][targetId] = fieldsIndices
         else
-            fieldsIndices = interpFieldsIndices[type]
+            fieldsIndices = interpFieldsIndices[type][targetId]
         end
 
         return fieldsIndices
@@ -370,6 +392,7 @@ local function loadFromTable(lfaTable, loadSettings)
 
     local function getInterpTypeAndFields(
             rawType, -- possibly a custom interp id, as well as a default interp type
+            target, -- interpolation target (vec3 or quat in example)
             base, -- base for fields relativization (for rotation is inverted for higher load speed)
             keyTime, -- key time
             keyVal, -- value of key (may relativized),
@@ -380,17 +403,17 @@ local function loadFromTable(lfaTable, loadSettings)
             local customId = rawType
             local type = lfaTable.interps[customId].type
 
-            local fieldsIndices = createOrGetInterpFieldsIndices(type)
+            local fieldsIndices = createOrGetInterpFieldsIndices(type, target)
 
             local plainFields = { }
 
             for name, value in pairs(lfaTable.interps[customId].fields) do
-                if type == analyzer.interpSquad then
+                if target == TYPE_QUAT then
                     value = quat_math.normalize(quat_math.from_xyzw(value))
                 end
 
                 if relativizeTransforms then
-                    if type == analyzer.interpSquad then
+                    if target == TYPE_QUAT then
                         value = quat_math.mul(base, value)
 
                         if quat_math.dot(value, keyVal) < 0 then
@@ -403,7 +426,13 @@ local function loadFromTable(lfaTable, loadSettings)
 
                 -- hermit tangents normalization
                 if type == analyzer.interpCubicSpline and nextKeyTime then
-                    value = vec3.mul(value, nextKeyTime - keyTime)
+                    local dt = nextKeyTime - keyTime
+
+                    if target == TYPE_QUAT then
+                        value = vec4.mul(value, dt)
+                    else
+                        value = vec3.mul(value, dt)
+                    end
                 end
 
                 plainFields[table.index(fieldsIndices, name)] = value
@@ -417,12 +446,13 @@ local function loadFromTable(lfaTable, loadSettings)
 
     local deferredAutoComputeInterpsFields = { }
 
-    local function tryAddToAutoComputeList(keys, type, loop, duration, fields)
+    local function tryAddToAutoComputeList(keys, type, target, loop, duration, fields)
         type = interpTypesIndices[type]
 
         if not fields and autoComputeInterpsTypes[type] then
             table.insert(deferredAutoComputeInterpsFields, {
                 type = type,
+                target = target,
                 loop = loop,
                 duration = duration,
                 keys = keys,
@@ -488,9 +518,16 @@ local function loadFromTable(lfaTable, loadSettings)
                 end
 
                 local function addToKeys(keys, transform, value, base, keyType)
+                    local target = keyType == KEY_TYPE_ROTATION and TYPE_QUAT or TYPE_VEC3
+
                     local type, fields
 
-                    type, fields = getInterpTypeAndFields(transform.interpolation, base, time, value, keyType, nextTime)
+                    type, fields = getInterpTypeAndFields(
+                            transform.interpolation, target,
+                            base,
+                            time, value, keyType,
+                            nextTime
+                    )
 
                     table.insert(keys, {
                         value,
@@ -498,7 +535,7 @@ local function loadFromTable(lfaTable, loadSettings)
                         type, fields
                     })
 
-                    tryAddToAutoComputeList(keys, type, lfaClip.loop, lfaClip.duration, fields)
+                    tryAddToAutoComputeList(keys, type, target, lfaClip.loop, lfaClip.duration, fields)
                 end
 
                 if bonePosition then
@@ -574,6 +611,7 @@ local function loadFromTable(lfaTable, loadSettings)
 
     for _, deferredRequest in ipairs(deferredAutoComputeInterpsFields) do
         local type = deferredRequest.type
+        local target = deferredRequest.target
         local loop = deferredRequest.loop
         local duration = deferredRequest.duration
         local keys = deferredRequest.keys
@@ -581,8 +619,8 @@ local function loadFromTable(lfaTable, loadSettings)
 
         local plainFields = { }
 
-        for name, value in pairs(autoComputeInterpsTypes[type](keys, index, duration, loop)) do
-            plainFields[table.index(createOrGetInterpFieldsIndices(type), name)] = value
+        for name, value in pairs(autoComputeInterpsTypes[type][target](keys, index, duration, loop)) do
+            plainFields[table.index(createOrGetInterpFieldsIndices(type, target), name)] = value
         end
 
         keys[index][constants.KEY_INTERP_FIELDS_INDEX] = plainFields

@@ -91,23 +91,37 @@ function M.combine(clipsMetadataArray, overrideClipsNames)
         end
 
         for type, value in pairs(clipsMetadata.interpFieldsIndices) do
-            local combinedConcreteInterpFieldsIndices = combinedInterpFieldsIndices[type]
+            local combinedTargetedInterpFieldsIndices = combinedInterpFieldsIndices[type]
 
             local tbl = { }
 
-            if not combinedConcreteInterpFieldsIndices then
-                combinedInterpFieldsIndices[type] = table.copy(value)
+            if not combinedTargetedInterpFieldsIndices then
+                combinedInterpFieldsIndices[type] = table.deep_copy(value)
 
-                for fieldIndex, _ in ipairs(value) do
-                    tbl[fieldIndex] = fieldIndex
+                for targetId, fieldIndices in pairs(value) do
+                    tbl[targetId] = { }
+
+                    for fieldIndex, _ in ipairs(fieldIndices) do
+                        tbl[targetId][fieldIndex] = fieldIndex
+                    end
                 end
             else
-                for fieldIndex, fieldName in ipairs(value) do
-                    if table.has(combinedConcreteInterpFieldsIndices, fieldName) then
-                        tbl[fieldIndex] = table.index(combinedConcreteInterpFieldsIndices, fieldName)
-                    else
-                        combinedConcreteInterpFieldsIndices[fieldIndex] = fieldName
-                        tbl[fieldIndex] = fieldIndex
+                for targetId, fieldIndices in pairs(value) do
+                    if not tbl[targetId] then
+                        tbl[targetId] = { }
+                    end
+
+                    if not combinedTargetedInterpFieldsIndices[targetId] then
+                        combinedTargetedInterpFieldsIndices[targetId] = { }
+                    end
+
+                    for fieldIndex, fieldName in ipairs(fieldIndices) do
+                        if table.has(combinedTargetedInterpFieldsIndices[targetId], fieldName) then
+                            tbl[targetId][fieldIndex] = table.index(combinedTargetedInterpFieldsIndices[targetId], fieldName)
+                        else
+                            combinedTargetedInterpFieldsIndices[targetId][fieldIndex] = fieldName
+                            tbl[targetId][fieldIndex] = fieldIndex
+                        end
                     end
                 end
             end
@@ -170,9 +184,11 @@ function M.combine(clipsMetadataArray, overrideClipsNames)
                                 local localFieldsValues = combinedKey[constants.KEY_INTERP_FIELDS_INDEX]
                                 local combinedFieldsValues = { }
 
+                                local targetId = i == constants.ROTATION_INDEX and constants.TARGET_QUAT or constants.TARGET_VEC3
+
                                 for j = 1, #localFieldsValues do
                                     combinedFieldsValues[
-                                    fromLocalInterpFieldsIndicesToCombined[localInterpTypeIndex][j]
+                                        fromLocalInterpFieldsIndicesToCombined[localInterpTypeIndex][targetId][j]
                                     ] = localFieldsValues[j]
                                 end
 

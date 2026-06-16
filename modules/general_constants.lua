@@ -28,7 +28,10 @@ return {
 
     POSITION_INDEX = 1,
     ROTATION_INDEX = 2,
-    SCALE_INDEX = 3
+    SCALE_INDEX = 3,
+
+    TARGET_VEC3 = 1,
+    TARGET_QUAT = 2
 
     --
 }

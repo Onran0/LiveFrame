@@ -153,6 +153,7 @@ local ATTR_DURATION = "duration"
 
 local ATTR_ID = "id"
 local ATTR_TYPE = "type"
+local ATTR_TARGET = "target"
 
 -- attributes values types
 
@@ -212,6 +213,22 @@ local interpTypes = {
     INTERP_STEP
 }
 
+local interpApplyTable = {
+    [INTERP_CUBIC_SPLINE] = {
+        VALUE_TYPE_VEC3,
+        VALUE_TYPE_QUAT
+    },
+
+    [INTERP_SQUAD] = {
+        VALUE_TYPE_QUAT
+    }
+}
+
+local defaultInterpTargetTable = {
+    [INTERP_CUBIC_SPLINE] = VALUE_TYPE_VEC3,
+    [INTERP_SQUAD] = VALUE_TYPE_QUAT
+}
+
 --
 
 local possibleElementsInRoot = { METADATA_TYPE, SKELETON_TYPE, CLIP_TYPE, INTERP_TYPE }
@@ -234,7 +251,8 @@ local possibleAttributes = {
     [SKELETON_TYPE] = { },
     [INTERP_TYPE] = {
         [ATTR_ID] = VALUE_TYPE_STRING,
-        [ATTR_TYPE] = VALUE_TYPE_STRING
+        [ATTR_TYPE] = VALUE_TYPE_STRING,
+        [ATTR_TARGET] = VALUE_TYPE_STRING
     },
     [INTERP_FIELD_TYPE] = {
         [ATTR_NAME] = VALUE_TYPE_STRING,
@@ -312,6 +330,7 @@ local defaultInterpTypes = {
 local defaultRotationInterpTypes = {
     INTERP_NLERP,
     INTERP_SLERP,
+    INTERP_CUBIC_SPLINE,
     INTERP_SQUAD,
     INTERP_STEP
 }
@@ -323,12 +342,20 @@ local allowedCustomizableInterpTypes = {
 
 local requiredCustomizableInterpTypesFields = {
     [INTERP_CUBIC_SPLINE] = {
-        [CUBIC_SPLINE_END_TANGENT] = VALUE_TYPE_VEC3,
-        [CUBIC_SPLINE_START_TANGENT] = VALUE_TYPE_VEC3
+        [VALUE_TYPE_VEC3] = {
+            [CUBIC_SPLINE_END_TANGENT] = VALUE_TYPE_VEC3,
+            [CUBIC_SPLINE_START_TANGENT] = VALUE_TYPE_VEC3
+        },
+        [VALUE_TYPE_QUAT] = {
+            [CUBIC_SPLINE_END_TANGENT] = VALUE_TYPE_QUAT,
+            [CUBIC_SPLINE_START_TANGENT] = VALUE_TYPE_QUAT
+        }
     },
     [INTERP_SQUAD] = {
-        [SQUAD_END_CONTROL] = VALUE_TYPE_QUAT,
-        [SQUAD_START_CONTROL] = VALUE_TYPE_QUAT
+        [VALUE_TYPE_QUAT] = {
+            [SQUAD_END_CONTROL] = VALUE_TYPE_QUAT,
+            [SQUAD_START_CONTROL] = VALUE_TYPE_QUAT
+        }
     }
 }
 
@@ -347,7 +374,10 @@ local M = {
     requiredCustomizableInterpTypesFields = requiredCustomizableInterpTypesFields,
 
     interpCubicSpline = INTERP_CUBIC_SPLINE,
-    interpSquad = INTERP_SQUAD
+    interpSquad = INTERP_SQUAD,
+
+    VALUE_TYPE_VEC3 = VALUE_TYPE_VEC3,
+    VALUE_TYPE_QUAT = VALUE_TYPE_QUAT
 }
 
 local function validateAndGetValueType(value)
@@ -439,7 +469,7 @@ local function analyzeElementSpecial(element, lfaTable)
        element.type == ROTATION_TYPE or
        element.type == SCALE_TYPE
     then
-        local function checkInterpolationType(interpAttr, defaultTypes, oppositeTypes, usingScope)
+        local function checkInterpolationType(interpAttr, defaultTypes, oppositeTypes, usingScope, forType)
             if interpAttr and not table.has(defaultTypes, interpAttr) then
                 local msg = "interpolation '" .. interpAttr .. "' can't be used for " .. usingScope
 
@@ -447,8 +477,15 @@ local function analyzeElementSpecial(element, lfaTable)
                     error(msg)
                 elseif not lfaTable.interps[interpAttr] then
                     error("unknown interpolation '" .. interpAttr .. "' (maybe custom declared after clip?)")
-                elseif not table.has(defaultTypes, lfaTable.interps[interpAttr].type) then
-                    error("custom " .. msg)
+                else
+                    local customInterp = lfaTable.interps[interpAttr]
+
+                    if
+                        not table.has(defaultTypes, customInterp.type) or
+                        customInterp.target ~= forType
+                    then
+                        error("custom " .. msg)
+                    end
                 end
             end
         end
@@ -478,21 +515,21 @@ local function analyzeElementSpecial(element, lfaTable)
                     "position", "scale"
                 }) do
                     checkInterpolationType(keyedInterpTable[interpType],
-                            defaultInterpTypes, defaultRotationInterpTypes, "position or scale"
+                            defaultInterpTypes, defaultRotationInterpTypes, "position or scale", VALUE_TYPE_VEC3
                     )
                 end
 
                 checkInterpolationType(keyedInterpTable["rotation"],
-                        defaultRotationInterpTypes, defaultInterpTypes, "rotation"
+                        defaultRotationInterpTypes, defaultInterpTypes, "rotation", VALUE_TYPE_QUAT
                 )
 
                 element.attributes[ATTR_INTERP] = keyedInterpTable
             end
         else
             if element.type == ROTATION_TYPE then
-                checkInterpolationType(interpAttr, defaultRotationInterpTypes, defaultInterpTypes, "rotation")
+                checkInterpolationType(interpAttr, defaultRotationInterpTypes, defaultInterpTypes, "rotation", VALUE_TYPE_QUAT)
             else
-                checkInterpolationType(interpAttr, defaultInterpTypes, defaultRotationInterpTypes, "position or scale")
+                checkInterpolationType(interpAttr, defaultInterpTypes, defaultRotationInterpTypes, "position or scale", VALUE_TYPE_VEC3)
             end
         end
     end
@@ -515,19 +552,28 @@ local function analyzeElementSpecial(element, lfaTable)
 
         local interpType = element.attributes[ATTR_TYPE]
 
-        local errorPrefix = "(at custom interp" .. id .. "):"
+        local errorPrefix = "(at custom interp " .. id .. "):"
 
         if not table.has(allowedCustomizableInterpTypes, interpType) then
             error(errorPrefix .. "interpolation type '" .. interpType .. "' is not customizable")
         end
 
+        local target = element.attributes[ATTR_TARGET]
+
+        if target and not table.has(interpApplyTable[interpType], target) then
+            error(errorPrefix .. "interpolation '" .. interpType .. "' is not applicable to " .. target)
+        end
+
+        target = target or defaultInterpTargetTable[interpType]
+
         local interpTable = {
             id = id,
             type = interpType,
+            target = target,
             fields = { }
         }
 
-        local requiredFields = requiredCustomizableInterpTypesFields[interpType]
+        local requiredFields = requiredCustomizableInterpTypesFields[interpType][target]
 
         for i = 1, #element.children do
             local field = element.children[i]
@@ -548,7 +594,8 @@ local function analyzeElementSpecial(element, lfaTable)
             if requiredValueType ~= validateAndGetValueType(value) then
                 error(
                         errorPrefix .. "in interpolation type '" .. interpType .. "' field '"
-                                .. name .. "' must have type '" .. requiredValueType .. "'"
+                                .. name .. "' must have type '" .. requiredValueType .. "' with target '"
+                                .. target .. "'"
                 )
             end
 
