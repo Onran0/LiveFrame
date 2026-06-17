@@ -62,18 +62,20 @@ local numberChars = '-0123456789.'
 
 local M = { }
 
-local function contains(str, char)
-    for i = 1, #str do
-        if str[i] == char then
-            return true
+local function find(str, char)
+    for i = 1, utf8.length(str) do
+        if utf8.sub(str, i, i) == char then
+            return i
         end
     end
+end
 
-    return false
+local function contains(str, char)
+    return find(str, char) ~= nil
 end
 
 local function parseAttributeValue(value)
-    local firstChar = value[1]
+    local firstChar = utf8.sub(value, 1, 1)
 
     if contains(numberChars, firstChar) then
         local num = tonumber(value)
@@ -82,11 +84,13 @@ local function parseAttributeValue(value)
 
         return num
     elseif firstChar == '"' then
-        if value[#value] ~= '"' then
+        local i = utf8.length(value)
+
+        if utf8.sub(value, i, i) ~= '"' then
             error('string literal must be end with quote char: ' .. value)
         end
 
-        return value:sub(2, #value - 1)
+        return utf8.sub(value, 2, utf8.length(value) - 1)
     elseif firstChar == '(' then
         local values = { }
 
@@ -94,14 +98,14 @@ local function parseAttributeValue(value)
         local inQuote = false
         local bracketsCount = 0
 
-        for i = 2, #value do
-            local char = value[i]
+        for i = 2, utf8.length(value) do
+            local char = utf8.sub(value, i, i)
 
             if char == '"' then
                 inQuote = not inQuote
             end
 
-            if (bracketsCount == 0 and char == ',' or i == #value) and not inQuote then
+            if (bracketsCount == 0 and char == ',' or i == utf8.length(value)) and not inQuote then
                 table.insert(values, parseAttributeValue(buffer:trim()))
 
                 buffer = ""
@@ -122,12 +126,12 @@ local function parseAttributeValue(value)
     elseif value == "false" then
         return false
     else
-        local separatorIndex = value:find(":")
+        local separatorIndex = find(value, ":")
 
-        if separatorIndex and #value > separatorIndex then
+        if separatorIndex and utf8.length(value) > separatorIndex then
             return {
-                key = value:sub(1, separatorIndex - 1),
-                value = parseAttributeValue(value:sub(separatorIndex + 1, #value):trim())
+                key = utf8.sub(value, 1, separatorIndex - 1),
+                value = parseAttributeValue(utf8.sub(value, separatorIndex + 1, utf8.length(value)):trim())
             }
         else
             error('invalid value: "' .. value .. '"')
@@ -156,11 +160,11 @@ function M.parse(text, offset, hasParent)
     local inQuote = false
     local bracketsCount = 0
 
-    local length = #text
+    local length = utf8.length(text)
     local i = offset or 1
 
     while i <= length do
-        local char = text[i]
+        local char = utf8.sub(text, i, i)
 
         if parsingAttributeName then
             if contains(newLineChars, char) then
