@@ -1,3 +1,9 @@
+<div align="center">
+    <img src="docs/media/large_logo.png" width="512" />
+</div>
+
+---
+
 # Введение в LiveFrame API
 
 Для начала вам нужно ознакомиться с форматами анимаций, поддерживаемыми **LiveFrame**:

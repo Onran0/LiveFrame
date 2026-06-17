@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="assets/large_logo.png" width="512" />
+    <img src="docs/media/large_logo.png" width="512" />
 </div>
 
 ---
@@ -8,6 +8,8 @@
 [Voxel Core](https://github.com/MihailRis/voxelcore/tree/main), написанный на **Lua**, с
 собственным форматом анимаций **LFA**, поддержкой аниматоров и простых проигрывателей анимаций, а также удобным
 **API** для контент-паков. Документация [здесь](docs/ru/public/README.md).
+
+[Гайд по использованию для чайников](docs/ru/public/teapot_guide.md)
 
 > [!WARNING]
 > Поскольку проект ещё находится в стадии формирования, некоторые его части
