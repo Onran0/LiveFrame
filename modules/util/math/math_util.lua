@@ -14,6 +14,8 @@
    limitations under the License.
 ]]--
 
+local constants = require "general_constants"
+
 local M = { }
 
 function M.lerp(a, b, t)
@@ -23,18 +25,18 @@ end
 function M.compose_matrix_from_transform(transform)
     local matrix
 
-    if transform[1] then
-        matrix = mat4.translate(transform[1])
+    if transform[constants.POSITION_INDEX] then
+        matrix = mat4.translate(transform[constants.POSITION_INDEX])
     else
         matrix = mat4.idt()
     end
 
-    if transform[2] then
-        matrix = mat4.mul(matrix, mat4.from_quat(transform[2]))
+    if transform[constants.ROTATION_INDEX] then
+        matrix = mat4.mul(matrix, mat4.from_quat(transform[constants.ROTATION_INDEX]))
     end
 
-    if transform[3] then
-        matrix = mat4.mul(matrix, mat4.scale(transform[3]))
+    if transform[constants.SCALE_INDEX] then
+        matrix = mat4.mul(matrix, mat4.scale(transform[constants.SCALE_INDEX]))
     end
 
     return matrix

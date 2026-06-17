@@ -17,18 +17,8 @@
 local constants = require "general_constants"
 
 local quat_math = require "util/math/quat_math"
-local math_util = require "util/math/math_util"
 
 local M = { }
-
-local function quatNlerp(a, b, t)
-    return quat_math.normalize({
-        math_util.lerp(a[1], b[1], t),
-        math_util.lerp(a[2], b[2], t),
-        math_util.lerp(a[3], b[3], t),
-        math_util.lerp(a[4], b[4], t)
-    })
-end
 
 local function hermiteBasis(t)
     local t2 = t * t
@@ -74,11 +64,7 @@ M.functions = { }
 
 M.functions[constants.TARGET_VEC3] = {
     lerp = function(a, b, t)
-        return {
-            math_util.lerp(a[1], b[1], t),
-            math_util.lerp(a[2], b[2], t),
-            math_util.lerp(a[3], b[3], t)
-        }
+        return vec3.mix(a, b, t)
     end,
 
     ["cubic-spline"] = function(a, b, t, startTangent, endTangent)
@@ -121,7 +107,9 @@ M.functions[constants.TARGET_QUAT] = {
         )
     end,
 
-    nlerp = quatNlerp,
+    nlerp = function(a, b, t)
+        return quat_math.normalize(vec4.mix(a, b, t))
+    end,
 
     slerp = quat.slerp,
 
