@@ -14,6 +14,8 @@
    limitations under the License.
 ]]--
 
+local constants = require "general_constants"
+
 local quat_math = require "util/math/quat_math"
 local math_util = require "util/math/math_util"
 
@@ -68,7 +70,9 @@ local function squadSlerp(q1, q2, t)
     )
 end
 
-M.functions = {
+M.functions = { }
+
+M.functions[constants.TARGET_VEC3] = {
     lerp = function(a, b, t)
         return {
             math_util.lerp(a[1], b[1], t),
@@ -80,31 +84,41 @@ M.functions = {
     ["cubic-spline"] = function(a, b, t, startTangent, endTangent)
         local h00, h10, h01, h11 = hermiteBasis(t)
 
-        if #a == 3 then
-            return
-            vec3.add(
-                    vec3.add(
-                            vec3.mul(a, h00),
-                            vec3.mul(startTangent, h10)
-                    ),
-                    vec3.add(
-                            vec3.mul(b, h01),
-                            vec3.mul(endTangent, h11)
-                    )
-            )
-        else
-            local q = {}
+        return
+        vec3.add(
+                vec3.add(
+                        vec3.mul(a, h00),
+                        vec3.mul(startTangent, h10)
+                ),
+                vec3.add(
+                        vec3.mul(b, h01),
+                        vec3.mul(endTangent, h11)
+                )
+        )
+    end,
 
-            for i=1,4 do
-                q[i] =  h00 * a[i]
-                        + h10 * startTangent[i]
-                        + h01 * b[i]
-                        + h11 * endTangent[i]
+    step = function(a, b, t)
+        if t == 1 then return b else return a end
+    end
+}
 
-            end
+M.functions[constants.TARGET_QUAT] = {
+    ["cubic-spline"] = function(a, b, t, startTangent, endTangent)
+        local h00, h10, h01, h11 = hermiteBasis(t)
 
-            return quat_math.normalize(q)
-        end
+        return
+        quat_math.normalize(
+                vec4.add(
+                        vec4.add(
+                                vec4.mul(a, h00),
+                                vec4.mul(startTangent, h10)
+                        ),
+                        vec4.add(
+                                vec4.mul(b, h01),
+                                vec4.mul(endTangent, h11)
+                        )
+                )
+        )
     end,
 
     nlerp = quatNlerp,
@@ -125,13 +139,21 @@ M.functions = {
 }
 
 M.customFieldsIndices = {
-    ["cubic-spline"] = {
-        "start-tangent",
-        "end-tangent"
+    [constants.TARGET_VEC3] = {
+        ["cubic-spline"] = {
+            "start-tangent",
+            "end-tangent"
+        }
     },
-    squad = {
-        "start-control",
-        "end-control"
+    [constants.TARGET_QUAT] = {
+        ["cubic-spline"] = {
+            "start-tangent",
+            "end-tangent"
+        },
+        squad = {
+            "start-control",
+            "end-control"
+        }
     }
 }
 

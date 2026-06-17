@@ -31,7 +31,9 @@ return {
     SCALE_INDEX = 3,
 
     TARGET_VEC3 = 1,
-    TARGET_QUAT = 2
+    TARGET_QUAT = 2,
+
+    TARGETS = { 1, 2 }
 
     --
 }

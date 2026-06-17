@@ -39,7 +39,7 @@ function M:new(clipsMetadata)
             local mappedFields = { }
 
             for i, interpField in ipairs(interpFields) do
-                mappedFields[i] = table.index(interpolation.customFieldsIndices[interpType], interpField)
+                mappedFields[i] = table.index(interpolation.customFieldsIndices[interpTargetId][interpType], interpField)
             end
 
             targetToFields[interpTargetId] = mappedFields
@@ -52,8 +52,12 @@ function M:new(clipsMetadata)
 
     local interpIndexToFunc = { }
 
-    for interpIndex, interpType in ipairs(clipsMetadata.interpTypesIndices) do
-        interpIndexToFunc[interpIndex] = interpolation.functions[interpType]
+    for _, targetId in ipairs(constants.TARGETS) do
+        interpIndexToFunc[targetId] = { }
+
+        for interpIndex, interpType in ipairs(clipsMetadata.interpTypesIndices) do
+            interpIndexToFunc[targetId][interpIndex] = interpolation.functions[targetId][interpType]
+        end
     end
 
     self.fromLocalInterpFieldsIndexToGlobal = fromLocalInterpFieldsIndexToGlobal
@@ -116,8 +120,6 @@ end
 function M:get_bone_transform_sample(boneIndex, currentTime, clipIndex, returnTable)
     local clip = self.clipsMetadata.clips[clipIndex]
 
-    local looped, duration = clip.loop, clip.duration
-
     local transform = { } -- 1 - translate (vec3), 2 - rotation (quat), 3 - scale (vec3)
 
     local boneKeys = clip.bonesKeys[boneIndex]
@@ -143,19 +145,19 @@ function M:get_bone_transform_sample(boneIndex, currentTime, clipIndex, returnTa
             elseif not keyFrom then
                 transform[i] = transformKeys[1][constants.KEY_VALUE_INDEX]
             else
+                local interpTargetId = i == constants.ROTATION_KEYS_INDEX and constants.TARGET_QUAT or constants.TARGET_VEC3
+
                 local keyFromTime = keyFrom[constants.KEY_TIME_INDEX]
                 local keyToTime = keyTo[constants.KEY_TIME_INDEX]
                 local interpTypeIndex = keyFrom[constants.KEY_INTERP_TYPE_INDEX]
 
                 local factor = (currentTime - keyFromTime) / (keyToTime - keyFromTime)
 
-                local interpFunc = self.interpIndexToFunc[interpTypeIndex] or interpolation.functions.step
+                local interpFunc = self.interpIndexToFunc[interpTargetId][interpTypeIndex] or interpolation.functions[interpTargetId].step
 
                 local value
 
                 if self.fromLocalInterpFieldsIndexToGlobal[interpTypeIndex] then
-                    local interpTargetId = i == 3 and constants.TARGET_QUAT or constants.TARGET_VEC3
-
                     value = interpFunc(
                             keyFrom[constants.KEY_VALUE_INDEX], keyTo[constants.KEY_VALUE_INDEX], factor,
                             self:__map_interp_fields(

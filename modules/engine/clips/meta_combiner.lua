@@ -184,7 +184,7 @@ function M.combine(clipsMetadataArray, overrideClipsNames)
                                 local localFieldsValues = combinedKey[constants.KEY_INTERP_FIELDS_INDEX]
                                 local combinedFieldsValues = { }
 
-                                local targetId = i == constants.ROTATION_INDEX and constants.TARGET_QUAT or constants.TARGET_VEC3
+                                local targetId = i == constants.ROTATION_KEYS_INDEX and constants.TARGET_QUAT or constants.TARGET_VEC3
 
                                 for j = 1, #localFieldsValues do
                                     combinedFieldsValues[
