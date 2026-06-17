@@ -235,23 +235,23 @@ local function getSquadControlQuat(keys, index, duration, loop)
     )
 end
 
-local function getHermiteTangentsByCatmullrom(keys, index, duration, loop)
+local function getHermiteTangentsByCatmullrom(vecSup, vecLib, keys, index, duration, loop)
     local t_prev, p_prev = getKeyDataForAutoCalculation(keys, duration, loop, index - 1)
     local t_curr, p_curr = getKeyDataForAutoCalculation(keys, duration, loop, index)
     local t_next, p_next = getKeyDataForAutoCalculation(keys, duration, loop, index + 1)
 
-    local inTangent, outTangent = { 0, 0, 0 }, { 0, 0, 0}
+    local inTangent, outTangent = vecSup(), vecSup()
 
     if p_prev and p_next then
         local dt = t_next - t_prev
         if dt > 0 then
-            local tangent = vec3.div(vec3.sub(p_next, p_prev), dt)
+            local tangent = vecLib.div(vecLib.sub(p_next, p_prev), dt)
 
-            local d1 = vec3.sub(p_curr, p_prev)
-            local d2 = vec3.sub(p_next, p_curr)
+            local d1 = vecLib.sub(p_curr, p_prev)
+            local d2 = vecLib.sub(p_next, p_curr)
 
-            if vec3.dot(d1, d2) <= 0 then
-                tangent = { 0, 0, 0 }
+            if vecLib.dot(d1, d2) <= 0 then
+                tangent = vecSup()
             end
 
             inTangent = tangent
@@ -260,41 +260,54 @@ local function getHermiteTangentsByCatmullrom(keys, index, duration, loop)
     elseif p_prev then
         local dt = t_curr - t_prev
         if dt > 0 then
-            inTangent = vec3.div(vec3.sub(p_curr, p_prev), dt)
+            inTangent = vecLib.div(vecLib.sub(p_curr, p_prev), dt)
         end
     elseif p_next then
         local dt = t_next - t_curr
         if dt > 0 then
-            outTangent = vec3.div(vec3.sub(p_next, p_curr), dt)
+            outTangent = vecLib.div(vecLib.sub(p_next, p_curr), dt)
         end
     end
 
     return { inTangent, outTangent }
 end
 
+local function getCubicSplineTangentsForKey(vecSup, vecLib, keys, index, duration, loop)
+    local t_curr = getKeyDataForAutoCalculation(keys, duration, loop, index)
+    local t_next = getKeyDataForAutoCalculation(keys, duration, loop, index + 1)
+
+    if not t_next then
+        return { ["start-tangent"] = vecSup(), ["end-tangent"] = vecSup() }
+    end
+
+    local startTangent = getHermiteTangentsByCatmullrom(vecSup, vecLib, keys, index, duration, loop)[2]
+    local endTangent = getHermiteTangentsByCatmullrom(vecSup, vecLib, keys, index + 1, duration, loop)[1]
+
+    -- tangents normalization
+    local dt = t_next - t_curr
+
+    startTangent = vecLib.mul(startTangent, dt)
+    endTangent = vecLib.mul(endTangent, dt)
+
+    return {
+        ["start-tangent"] = startTangent,
+        ["end-tangent"] = endTangent
+    }
+end
+
 local autoComputeInterpsTypes = {
     [analyzer.interpCubicSpline] = {
-        [TYPE_VEC3] = function(keys, index, duration, loop)
-            local t_curr = getKeyDataForAutoCalculation(keys, duration, loop, index)
-            local t_next = getKeyDataForAutoCalculation(keys, duration, loop, index + 1)
-
-            if not t_next then
-                return { ["start-tangent"] = { 0, 0, 0 }, ["end-tangent"] = { 0, 0, 0 } }
-            end
-
-            local startTangent = getHermiteTangentsByCatmullrom(keys, index, duration, loop)[2]
-            local endTangent = getHermiteTangentsByCatmullrom(keys, index + 1, duration, loop)[1]
-
-            -- tangents normalization
-            local dt = t_next - t_curr
-
-            startTangent = vec3.mul(startTangent, dt)
-            endTangent = vec3.mul(endTangent, dt)
-
-            return {
-                ["start-tangent"] = startTangent,
-                ["end-tangent"] = endTangent
-            }
+        [TYPE_VEC3] = function(...)
+            return getCubicSplineTangentsForKey(
+                    function() return { 0, 0, 0 }  end, vec3,
+                    ...
+            )
+        end,
+        [TYPE_QUAT] = function(...)
+            return getCubicSplineTangentsForKey(
+                    function() return { 0, 0, 0, 0 }  end, vec4,
+                    ...
+            )
         end
     },
 
@@ -337,8 +350,6 @@ local function eulerToQuat(euler, order)
 end
 
 local function loadFromTable(lfaTable, loadSettings)
-    debug.print(lfaTable)
-
     local interpTypesIndices = { }
     local interpFieldsIndices = { }
     local bonesIndices = { }
