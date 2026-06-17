@@ -5,7 +5,8 @@
 Используется для простого проигрывания анимаций.
 
 **Используемые классы & объекты:**
-- [sampler](../objects/sampler.md).
+- [sampler](../objects/sampler.md);
+- [transform](../objects/transform.md).
 
 ```lua
 -- Начинает проигрывание клипа по имени
@@ -16,6 +17,22 @@ player:play_by_index(clipIndex: int)
 
 -- Задаёт обработчик для конкретного ивента (см. modules/api.md)
 player:set_event_handler(eventName: string, eventHandler: function)
+
+-- Задаёт функцию пост-обработки для конкретной кости.
+player:set_post_processor(
+    -- Имя кости в скелете
+    rigName: string,
+
+    -- Функция принимает позу кости от проигрывателя и возвращает итоговую, что будет записана в скелет
+    postProcessor: function(pose: transform) -> transform
+)
+
+-- Задаёт глобальную функцию пост-обработки.
+player:set_global_post_processor(
+    -- Функция принимает индекс кости и её позу от проигрывателя и возвращает итоговую, что будет записана в скелет.
+    -- Если для этой кости также есть локальный пост-обработчик, то он получит результат от глобального пост-обработчика.
+    postProcessor: function(rigIndex: int, pose: transform) -> transform
+)
 
 -- Возвращает имя текущего клипа
 player:get_playing_clip_name() -> string

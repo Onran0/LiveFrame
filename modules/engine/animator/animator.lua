@@ -50,7 +50,9 @@ function M:new(loadedSettings, skeleton)
         speed = 1,
         paused = false,
         skeleton = skeleton,
-        eventHandlers = { }
+        eventHandlers = { },
+        postProcessors = { },
+        boneNameToPostProcessor = { }
     }, self)
 
     self.__update_rig_indices(obj)
@@ -66,6 +68,16 @@ function M:__update_rig_indices()
     end
 
     self.boneIndexToRigIndex = boneIndexToRigIndex
+
+    self.postProcessors = { }
+
+    for rigName, postProcessor in pairs(self.boneNameToPostProcessor) do
+        local rigIndex = self.skeleton:index(rigName)
+
+        if rigIndex then
+            self.postProcessors[rigIndex] = postProcessor
+        end
+    end
 end
 
 function M:__check_events(prevTime, time, state, layerIndex, inner)
@@ -186,6 +198,15 @@ function M:set_event_handler(eventName, eventHandler)
     self.eventHandlers[eventName] = eventHandler
 end
 
+function M:set_post_processor(rigName, func)
+    self.postProcessors[self.skeleton:index(rigName)] = func
+    self.boneNameToPostProcessor[rigName] = func
+end
+
+function M:set_global_post_processor(func)
+    self.postProcessor = func
+end
+
 function M:set_boolean(name, value)
     self:__set_parameter(name, value)
 end
@@ -260,9 +281,22 @@ function M:step(delta)
         )
     end
 
+    local globalPostProcessor = self.postProcessor
+
     for index, transform in ipairs(pose) do
+        local rigIndex = self.boneIndexToRigIndex[index]
+        local postProcessor = self.postProcessors[rigIndex]
+
+        if globalPostProcessor then
+            transform = globalPostProcessor(rigIndex, transform)
+        end
+
+        if postProcessor then
+            transform = postProcessor(transform)
+        end
+
         self.skeleton:set_matrix(
-                self.boneIndexToRigIndex[index],
+                rigIndex,
                 math_util.compose_matrix_from_transform(transform)
         )
     end

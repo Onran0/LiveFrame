@@ -28,7 +28,9 @@ function M:new(sampler, skeleton)
         sampler = sampler,
         skeleton = skeleton,
         paused = false,
-        eventHandlers = { }
+        eventHandlers = { },
+        postProcessors = { },
+        boneNameToPostProcessor = { }
     }), self)
 
     obj:__update_rig_indices()
@@ -44,6 +46,16 @@ function M:__update_rig_indices()
     end
 
     self.boneIndexToRigIndex = boneIndexToRigIndex
+
+    self.postProcessors = { }
+
+    for rigName, postProcessor in pairs(self.boneNameToPostProcessor) do
+        local rigIndex = self.skeleton:index(rigName)
+
+        if rigIndex then
+            self.postProcessors[rigIndex] = postProcessor
+        end
+    end
 end
 
 function M:__check_events(prevTime, time, inner)
@@ -71,6 +83,15 @@ end
 
 function M:set_event_handler(eventName, eventHandler)
     self.eventHandlers[eventName] = eventHandler
+end
+
+function M:set_post_processor(rigName, func)
+    self.postProcessors[self.skeleton:index(rigName)] = func
+    self.boneNameToPostProcessor[rigName] = func
+end
+
+function M:set_global_post_processor(func)
+    self.postProcessor = func
 end
 
 function M:get_sampler()
@@ -156,9 +177,22 @@ function M:step(delta)
 
     self:__check_events(prevTime, time)
 
+    local globalPostProcessor = self.postProcessor
+
     for index, transform in ipairs(self.sampler:get_transforms_sample(time, self.playingClip)) do
+        local rigIndex = self.boneIndexToRigIndex[index]
+        local postProcessor = self.postProcessors[rigIndex]
+
+        if globalPostProcessor then
+            transform = globalPostProcessor(rigIndex, transform)
+        end
+
+        if postProcessor then
+            transform = postProcessor(transform)
+        end
+
         self.skeleton:set_matrix(
-                self.boneIndexToRigIndex[index],
+                rigIndex,
                 math_util.compose_matrix_from_transform(transform)
         )
     end
