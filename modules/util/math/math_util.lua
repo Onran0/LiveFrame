@@ -22,6 +22,28 @@ function M.lerp(a, b, t)
     return a + (b - a) * t
 end
 
+function M.hermite_basis(t)
+    local t2 = t * t
+    local t3 = t2 * t
+
+    local h00 =  2 * t3 - 3 * t2 + 1
+    local h10 =  t3 - 2 * t2 + t
+    local h01 = -2 * t3 + 3 * t2
+    local h11 = t3 - t2
+
+    return h00, h10, h01, h11
+end
+
+function M.hermite_spline(a, b, t, startTangent, outTangent)
+    local h00, h10, h01, h11 = M.hermite_basis(t)
+
+    return a * h00 + startTangent * h10 + b * h01 + outTangent * h11
+end
+
+function M.hermite_easing(t, easeStart, easeEnd)
+    return M.hermite_spline(0, 1, t, easeStart, easeEnd)
+end
+
 function M.compose_matrix_from_transform(transform)
     local matrix
 

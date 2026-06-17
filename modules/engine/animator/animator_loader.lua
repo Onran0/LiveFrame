@@ -62,7 +62,9 @@ result format:
                     interrupt = constants.INTERRUPT_HIGHER_PRIORITY,
                     duration = 0.25,
                     exitTime = 0.0, -- can be nil. for example defined
-                    blendCurve = constants.TRANSITION_BLEND_CURVE_LINEAR,
+                    blendCurve = {
+                        type = constants.TRANSITION_BLEND_CURVE_LINEAR
+                    },
                     conditionFunc = function(...) local speed, jump, t = ...; return <original condition> end
                 },
                 {
@@ -72,7 +74,11 @@ result format:
                     interrupt = constants.INTERRUPT_HIGHER_PRIORITY,
                     duration = 0.25,
                     timer = <instance of liveframe:engine/timer.lua>,
-                    blendCurve = constants.TRANSITION_BLEND_CURVE_LINEAR,
+                    blendCurve = {
+                        type = constants.TRANSITION_BLEND_CURVE_HERMIT,
+                        easeIn = 0,
+                        easeOut = 1
+                    },
                     conditionFunc = function(...) local speed, jump, t = ...; return <original condition> end
                 },
                 {
@@ -82,7 +88,9 @@ result format:
                     interrupt = constants.INTERRUPT_NONE,
                     duration = 0.25,
                     timer = <instance of liveframe:engine/timer.lua>,
-                    blendCurve = constants.TRANSITION_BLEND_CURVE_LINEAR,
+                    blendCurve = {
+                        type = constants.TRANSITION_BLEND_CURVE_LINEAR
+                    },
                     conditionFunc = function(...) local speed, jump, t = ...; return <original condition> end
                 },
                 {
@@ -92,7 +100,9 @@ result format:
                     interrupt = constants.INTERRUPT_NONE,
                     duration = 0.25,
                     timer = <instance of liveframe:engine/timer.lua>,
-                    blendCurve = constants.TRANSITION_BLEND_CURVE_LINEAR,
+                    blendCurve = {
+                        type = constants.TRANSITION_BLEND_CURVE_LINEAR
+                    },
                     conditionFunc = function(...) local speed, jump, t = ...; return <original condition> end
                 },
                 {
@@ -102,7 +112,9 @@ result format:
                     interrupt = constants.INTERRUPT_HIGHER_PRIORITY,
                     duration = 0.25,
                     timer = <instance of liveframe:engine/timer.lua>,
-                    blendCurve = constants.TRANSITION_BLEND_CURVE_LINEAR
+                    blendCurve = {
+                        type = constants.TRANSITION_BLEND_CURVE_LINEAR
+                    }
                 },
                 {
                     from = 3,
@@ -111,7 +123,9 @@ result format:
                     interrupt = constants.INTERRUPT_HIGHER_PRIORITY,
                     duration = 0.25,
                     timer = <instance of liveframe:engine/timer.lua>,
-                    blendCurve = constants.TRANSITION_BLEND_CURVE_LINEAR,
+                    blendCurve = {
+                        type = constants.TRANSITION_BLEND_CURVE_LINEAR
+                    },
                     conditionFunc = function(...) local speed, jump, t = ...; return <original condition> end
                 }
             }
@@ -164,6 +178,10 @@ local FIELD_CONDITIONS = "conditions"
 
 local STATE_TYPE_CLIP = "clip"
 local TRANSITION_BLEND_CURVE_LINEAR = "linear"
+local TRANSITION_BLEND_CURVE_HERMIT = "hermite"
+
+local FIELD_BLEND_CURVE_EASE_START = "ease-start"
+local FIELD_BLEND_CURVE_EASE_END = "ease-end"
 
 local TRANSITION_INTERRUPT_ANY = "any"
 local TRANSITION_INTERRUPT_NONE = "none"
@@ -176,7 +194,8 @@ local STATE_TYPES = {
 }
 
 local TRANSITION_BLEND_CURVES = {
-    TRANSITION_BLEND_CURVE_LINEAR
+    TRANSITION_BLEND_CURVE_LINEAR,
+    TRANSITION_BLEND_CURVE_HERMIT
 }
 
 local TRANSITION_INTERRUPT_TYPES = {
@@ -253,11 +272,20 @@ local structures = {
             [FIELD_CAN_INTERRUPT] = luaType("string"),
             [FIELD_DURATION] = luaType("number"),
             [FIELD_EXIT_TIME] = luaType("number"),
-            [FIELD_BLEND_CURVE] = luaType("string"),
+            [FIELD_BLEND_CURVE] = { luaType("string"), structureType("blendCurveInfo") },
             [FIELD_CONDITION] = luaType("string"),
             [FIELD_CONDITIONS] = arrayOf(luaType("string"))
         },
         requiredFields = { FIELD_FROM, FIELD_TO, FIELD_DURATION }
+    },
+
+    blendCurveInfo = {
+        fields = {
+            [FIELD_TYPE] = luaType("string"),
+            [FIELD_BLEND_CURVE_EASE_START] = luaType("number"),
+            [FIELD_BLEND_CURVE_EASE_END] = luaType("number")
+        },
+        requiredFields = { FIELD_TYPE }
     },
 
     root = {
@@ -277,7 +305,8 @@ local layerBlendModeTypeToIndex = {
 }
 
 local transitionBlendCurveTypeToIndex = {
-    [TRANSITION_BLEND_CURVE_LINEAR] = constants.TRANSITION_BLEND_CURVE_LINEAR
+    [TRANSITION_BLEND_CURVE_LINEAR] = constants.TRANSITION_BLEND_CURVE_LINEAR,
+    [TRANSITION_BLEND_CURVE_HERMIT] = constants.TRANSITION_BLEND_CURVE_HERMITE
 }
 
 local interruptTypeToIndex = {
@@ -607,6 +636,9 @@ local function loadFromTable(animatorTable)
                 local blendCurve = transition[FIELD_BLEND_CURVE] or TRANSITION_BLEND_CURVE_LINEAR
                 local interrupt = transition[FIELD_CAN_INTERRUPT] or TRANSITION_INTERRUPT_NONE
 
+                local hasBlendCurveExtra = type(blendCurve) == "table"
+                local blendCurveType = hasBlendCurveExtra and blendCurve.type or blendCurve
+
                 validateStateExist(toState)
 
                 if duration < 0 then
@@ -617,12 +649,40 @@ local function loadFromTable(animatorTable)
                     error("exit time must be normalized")
                 end
 
-                if not table.has(TRANSITION_BLEND_CURVES, blendCurve) then
-                    error("unknown transition blend curve type: " .. blendCurve)
+                if not table.has(TRANSITION_BLEND_CURVES, blendCurveType) then
+                    error("undefined transition blend curve type: " .. blendCurveType)
                 end
 
                 if not table.has(TRANSITION_INTERRUPT_TYPES, interrupt) then
-                    error("unknown transition interrupt type: " .. interrupt)
+                    error("undefined transition interrupt type: " .. interrupt)
+                end
+
+                local blendCurveTable = {
+                    type = transitionBlendCurveTypeToIndex[blendCurveType]
+                }
+
+                if blendCurveType == TRANSITION_BLEND_CURVE_HERMIT then
+                    local easeStart = 0
+                    local easeEnd = 0
+
+                    if hasBlendCurveExtra then
+                        easeStart = blendCurve[FIELD_BLEND_CURVE_EASE_START] or 0
+                        easeEnd = blendCurve[FIELD_BLEND_CURVE_EASE_START] or 0
+                    end
+
+                    blendCurveTable.easeStart = easeStart
+                    blendCurveTable.easeEnd = easeEnd
+                elseif blendCurveType == TRANSITION_BLEND_CURVE_LINEAR then
+                    if
+                        blendCurve[FIELD_BLEND_CURVE_EASE_START] or
+                        blendCurve[FIELD_BLEND_CURVE_EASE_END]
+                    then
+                        error(
+                                "blend curve of type 'linear' can't have '" ..
+                                FIELD_BLEND_CURVE_EASE_START .. "' or '" ..
+                                FIELD_BLEND_CURVE_EASE_END .. "' fields"
+                        )
+                    end
                 end
 
                 local baseTable = {
@@ -632,7 +692,7 @@ local function loadFromTable(animatorTable)
                     duration = duration,
                     timer = timer:new(duration),
                     exitTime = exitTime,
-                    blendCurve = transitionBlendCurveTypeToIndex[blendCurve],
+                    blendCurve = blendCurveTable,
                     conditionFunc = conditionFunc
                 }
 

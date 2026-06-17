@@ -152,14 +152,21 @@ function M:__step_layer(delta, layer, layerIndex)
             layer.currentState = currentTransition.to
         end
 
-        if currentTransition.blendCurve == constants.TRANSITION_BLEND_CURVE_LINEAR then
-            return self.blender:calculate_samples_and_blend(
-                    { fromTime, toTime },
-                    { stateFrom.clip, stateTo.clip },
-                    { 1 - transitionNormTime, transitionNormTime },
-                    true
+        local blendCurve = currentTransition.blendCurve
+
+        if blendCurve.type == constants.TRANSITION_BLEND_CURVE_HERMITE then
+            transitionNormTime = math_util.hermite_easing(
+                    transitionNormTime,
+                    blendCurve.easeStart, blendCurve.easeEnd
             )
         end
+
+        return self.blender:calculate_samples_and_blend(
+                { fromTime, toTime },
+                { stateFrom.clip, stateTo.clip },
+                { 1 - transitionNormTime, transitionNormTime },
+                true
+        )
     end
 
     local prevTime = currentState.timer:get_time()

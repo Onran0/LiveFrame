@@ -17,26 +17,9 @@
 local constants = require "general_constants"
 
 local quat_math = require "util/math/quat_math"
+local math_util = require "util/math/math_util"
 
 local M = { }
-
-local function hermiteBasis(t)
-    local t2 = t * t
-    local t3 = t2 * t
-
-    local h00 =  2 * t3 - 3 * t2 + 1
-    local h10 =  t3 - 2 * t2 + t
-    local h01 = -2 * t3 + 3 * t2
-    local h11 = t3 - t2
-
-    return h00, h10, h01, h11
-end
-
-local function singleCubicSpline(a, b, t, inTangent, outTangent)
-    local h00, h10, h01, h11 = hermiteBasis(t)
-
-    return a * h00 + outTangent * h10 + b * h01 + inTangent * h11
-end
 
 local function squadSlerp(q1, q2, t)
     local dot = math.clamp(quat_math.dot(q1, q2), -1, 1)
@@ -68,7 +51,7 @@ M.functions[constants.TARGET_VEC3] = {
     end,
 
     ["cubic-spline"] = function(a, b, t, startTangent, endTangent)
-        local h00, h10, h01, h11 = hermiteBasis(t)
+        local h00, h10, h01, h11 = math_util.hermite_basis(t)
 
         return
         vec3.add(
@@ -90,7 +73,7 @@ M.functions[constants.TARGET_VEC3] = {
 
 M.functions[constants.TARGET_QUAT] = {
     ["cubic-spline"] = function(a, b, t, startTangent, endTangent)
-        local h00, h10, h01, h11 = hermiteBasis(t)
+        local h00, h10, h01, h11 = math_util.hermite_basis(t)
 
         return
         quat_math.normalize(
@@ -144,7 +127,5 @@ M.customFieldsIndices = {
         }
     }
 }
-
-M.single_cubic_spline = singleCubicSpline
 
 return M
