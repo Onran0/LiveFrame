@@ -299,13 +299,13 @@ local autoComputeInterpsTypes = {
     [analyzer.interpCubicSpline] = {
         [TYPE_VEC3] = function(...)
             return getCubicSplineTangentsForKey(
-                    function() return { 0, 0, 0 }  end, vec3,
+                    function() return { 0, 0, 0 } end, vec3,
                     ...
             )
         end,
         [TYPE_QUAT] = function(...)
             return getCubicSplineTangentsForKey(
-                    function() return { 0, 0, 0, 0 }  end, vec4,
+                    function() return { 0, 0, 0, 0 } end, vec4,
                     ...
             )
         end
