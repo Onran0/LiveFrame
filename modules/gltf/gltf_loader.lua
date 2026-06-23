@@ -88,6 +88,10 @@ local elementTypes = {
     SCALAR, VEC2, VEC3, VEC4, MAT2, MAT3, MAT4
 }
 
+local matrixTypes = {
+    MAT2, MAT3, MAT4
+}
+
 local elementTypeComponentsCount = {
     [SCALAR] = 1,
     [VEC2] = 2,
@@ -98,13 +102,49 @@ local elementTypeComponentsCount = {
     [MAT4] = 16
 }
 
+local matrixColumnsCount = {
+    [MAT2] = 2,
+    [MAT3] = 3,
+    [MAT4] = 4
+}
+
+local matrixRowsCount = {
+    [MAT2] = 2,
+    [MAT3] = 3,
+    [MAT4] = 4
+}
+
 local function deserializeAccessorElement(type, componentType, bytes, normalized)
     local componentsCount = elementTypeComponentsCount[type]
     local componentFormat = componentTypeFormats[componentType]
 
-    local format = "<" .. componentFormat:rep(componentsCount)
+    local format = "<"
+    local components
 
-    local components = { byteutil.unpack(format, bytes) }
+    if not table.has(matrixTypes, type) then
+        format = format .. componentFormat:rep(componentsCount)
+        components = { byteutil.unpack(format, bytes) }
+    else
+        local componentSize = componentSizesInBytes[componentType]
+
+        local columnPaddingBytes = (componentSize * matrixRowsCount[type]) % 4
+
+        format = format .. (componentFormat:rep(componentsCount)
+                             .. ("?") -- '?' is boolean format
+                                :rep(columnPaddingBytes)):rep(matrixColumnsCount[type])
+
+        -- padding bytes will be read as booleans
+
+        format = format:sub(1, #format - columnPaddingBytes) -- removing trailing padding bytes cuz they may missing
+
+        components = table.filter(
+                { byteutil.unpack(format, bytes) },
+
+                function(_, value)
+                    return type(value) ~= "boolean" -- trick for simple remove padding bytes
+                end
+        )
+    end
 
     if normalized then
         local max = componentTypeMaxValues[componentType]
@@ -118,14 +158,29 @@ local function deserializeAccessorElement(type, componentType, bytes, normalized
 end
 
 local function deserializeAccessorElements(type, componentType, view, stride, offset, count, normalized)
-    local elementSize = componentSizesInBytes[componentType]
-            * elementTypeComponentsCount[type]
-
     local elements = { }
+
+    local componentSize = componentSizesInBytes[componentType]
+
+    local elementSize = componentSize * elementTypeComponentsCount[type]
+
+    local columnPaddingBytes
+
+    local isMatrixType = table.has(matrixTypes, type)
+
+    if isMatrixType then
+        columnPaddingBytes = (componentSize * matrixRowsCount[type]) % 4
+
+        elementSize = elementSize + columnPaddingBytes * matrixColumnsCount[type]
+    end
 
     stride = stride or elementSize
 
     for i = 0, count - 1 do
+        if isMatrixType and i == count - 1 then
+            elementSize = elementSize - columnPaddingBytes
+        end
+
         local elementBytes = view:slice(offset + i * stride + 1, elementSize)
 
         table.insert(elements, deserializeAccessorElement(
@@ -250,6 +305,80 @@ function M.load(value, loadSettings)
             error("glTF files with version " .. majorVersion .. ".x is not supported by this loader")
         end
     end
+
+    local nodes = { }
+
+    if gltfTable.nodes then
+        for i, node in ipairs(gltfTable.nodes) do
+            local destNodeTable = {
+                name = node.name,
+                translation = node.translation or { 0, 0, 0 },
+                rotation = node.rotation or { 1, 0, 0, 0 },
+                scale = node.scale or { 1, 1, 1 }
+            }
+
+            if node.matrix then
+                if node.translation or node.rotation or node.scale then
+                    error("node matrix present with translation/rotation/scale")
+                end
+
+                local decomposed = mat4.decompose(node.matrix)
+
+                if not decomposed then
+                    error("not decomposable matrix defined in node")
+                end
+
+                destNodeTable.translation = decomposed.translation
+                destNodeTable.rotation = decomposed.quaternion
+                destNodeTable.scale = decomposed.scale
+            end
+        end
+
+        for i, node in ipairs(gltfTable.nodes) do
+            if node.children then
+                local children = { }
+
+                for j, childIndex in ipairs(node.children) do
+                    children[j] = childIndex + 1
+
+                    nodes[childIndex + 1].parent = i
+                end
+
+                nodes[i].children = children
+            end
+        end
+    end
+
+    local scenes = { }
+
+    for i, scene in ipairs(gltfTable.scenes) do
+        local sceneNodes = { }
+
+        for j, nodeIndex in ipairs(scene.nodes) do
+            sceneNodes[j] = nodeIndex + 1
+
+            if nodes[nodeIndex + 1].parent then
+                error("scene nodes must be roots (without parent)")
+            end
+        end
+
+        scenes[i] = {
+            name = scene.name,
+            nodes = sceneNodes
+        }
+    end
+
+    local sceneIndex = gltfTable.scene
+
+    if sceneIndex then
+        sceneIndex = sceneIndex + 1
+    else sceneIndex = loadSettings.sceneIndex end
+
+    if sceneIndex then
+        error("display scene index is undefined in gltf file, and in load settings")
+    end
+
+    local scene = scenes[sceneIndex]
 
     local buffers = { }
     local bufferViews = { }
