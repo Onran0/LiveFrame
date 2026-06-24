@@ -16,6 +16,8 @@
 
 local quat_math = require "util/math/quat_math"
 
+local warnings = true
+
 local supportedVersion = "2.0"
 
 local bufferMediaTypes = {
@@ -337,6 +339,12 @@ local function splitVersionToMajorMinor(strVersion)
     end
 
     error("invalid version format: " .. strVersion)
+end
+
+local function warning(msg)
+    if warnings then
+        print("warning: " .. msg)
+    end
 end
 
 local uniqueModelIndex = 0
@@ -674,6 +682,115 @@ function M.load(value, loadSettings)
         }
     end
 
+    local images = { }
+    local textures = { }
+    local materials = { }
+
+    for i, imageInfo in ipairs(gltfTable.images) do
+        local bytes, mimeType
+
+        if imageInfo.bufferView then
+            if not imageInfo.mimeType then
+                error("image refers to bufferView must define mimeType")
+            end
+
+            bytes = getBufferView(imageInfo.bufferView).view
+            mimeType = imageInfo.mimeType
+        elseif imageInfo.uri then
+            bytes = loadBytearrayFromURI(imageInfo.uri, loadSettings.sourceFile)
+
+            if imageInfo.mimeType then
+                mimeType = imageInfo.mimeType
+            else
+                mimeType = getMimeType(bytes)
+
+                if not mimeType then
+                    error("failed to determine mimeType of image at index " .. i)
+                end
+            end
+        end
+
+        if not table.has(imageMediaTypes, mimeType) then
+            error("unknown mimeType of image at index " .. i)
+        end
+
+        if not table.has(supportedImageMediaTypes, mimeType) then
+            warning(
+                    "images of mimeType=" ..
+                            mimeType .. " is not supported by this loader. image will be replaced with a placeholder"
+            )
+
+            images[i] = "notfound"
+        else
+            local textureName = "lf_gltf_" .. uniqueModelIndex .. "_" .. i
+
+            if mimeType == pngMediaType then
+                assets.load_texture(bytes, textureName, "png")
+            end
+
+            images[i] = textureName
+        end
+    end
+
+    for i, textureInfo in ipairs(gltfTable.textures) do
+        if textureInfo.sampler then
+            warning("texture samplers is not supported by this loader. texture will be loaded with default render engine parameters")
+        end
+
+        local textureName
+
+        if not textureInfo.source then
+            textureName = "notfound"
+        else
+            if not images[textureInfo.source] then
+                error("image with index " .. textureInfo.source .. " used at texture " .. i .. " is undefined")
+            else
+                textureName = images[textureInfo.source]
+            end
+        end
+
+        textures[i] = textureName
+    end
+
+    for i, materialInfo in ipairs(gltfTable.materials) do
+        local printWarning = materialInfo.normalTexture
+                or materialInfo.emissiveFactor
+                or materialInfo.alphaMode
+                or materialInfo.alphaCutoff
+                or materialInfo.doubleSided
+
+        local pbr = materialInfo.pbrMetallicRoughness
+
+        local textureName = "white"
+
+        if pbr then
+            printWarning = printWarning
+                    or pbr.baseColorFactor
+                    or pbr.metallicFactor
+                    or pbr.roughnessFactor
+
+            local baseTexture = pbr.baseColorTexture
+
+            if baseTexture then
+                printWarning = printWarning or baseTexture.texCoord ~= 0
+
+                textureName = textures[baseTexture.index]
+
+                if not textureName then
+                    error("texture with index " .. baseTexture.index .. " used in material with index " .. i .. " is undefined")
+                end
+            end
+        end
+
+        materials[i] = {
+            texture = textureName
+        }
+
+        if printWarning then
+            warning("of all materials properties supported only base color texture")
+        end
+    end
+
     local meshes = { }
 
     for _, meshInfo in ipairs(gltfTable.meshes) do
@@ -685,8 +802,8 @@ function M.load(value, loadSettings)
             end
 
             if not table.has(supportedPrimitiveModes, primitiveInfo.mode) then
-                print(
-                        "warning: mesh primitives with mode " ..
+                warning(
+                        "mesh primitives with mode " ..
                         primitiveInfo.mode .. " is not supported by this loader. skipping it"
                 )
             else
@@ -724,7 +841,7 @@ function M.load(value, loadSettings)
                             values = accessor.values
                         })
                     else
-                        print("warning: mesh primitive attributes of type " .. attribName .. " is not supported by this loader. skipping it")
+                        warning("mesh primitive attributes of type " .. attribName .. " is not supported by this loader. skipping it")
                     end
                 end
 
@@ -762,10 +879,16 @@ function M.load(value, loadSettings)
                     end
                 end
 
+                local material = materials[primitiveInfo.material]
+
+                if not material then
+                    error("material with index " .. primitiveInfo.material .. " used in some mesh primitive is undefined")
+                end
+
                 table.insert(primitives, {
                     attributes = attributes,
                     indices = indices,
-                    material = primitiveInfo.material
+                    material = material
                 })
             end
         end
@@ -779,75 +902,6 @@ function M.load(value, loadSettings)
         if node.mesh and not meshes[node.mesh] then
             error("node " .. node.name .. " using undefined mesh with index " .. node.mesh)
         end
-    end
-
-    local images = { }
-    local textures = { }
-
-    for i, image in ipairs(gltfTable.images) do
-        local bytes, mimeType
-
-        if image.bufferView then
-            if not image.mimeType then
-                error("image refers to bufferView must define mimeType")
-            end
-
-            bytes = getBufferView(image.bufferView).view
-            mimeType = image.mimeType
-        elseif image.uri then
-            bytes = loadBytearrayFromURI(image.uri, loadSettings.sourceFile)
-
-            if image.mimeType then
-                mimeType = image.mimeType
-            else
-                mimeType = getMimeType(bytes)
-
-                if not mimeType then
-                    error("failed to determine mimeType of image at index " .. i)
-                end
-            end
-        end
-
-        if not table.has(imageMediaTypes, mimeType) then
-            error("unknown mimeType of image at index " .. i)
-        end
-
-        if not table.has(supportedImageMediaTypes, mimeType) then
-            print(
-                    "warning: images of mimeType=" ..
-                    mimeType .. " is not supported by this loader. image will be replaced with a placeholder"
-            )
-
-            images[i] = "notfound"
-        else
-            local textureName = "lf_gltf_" .. uniqueModelIndex .. "_" .. i
-
-            if mimeType == pngMediaType then
-                assets.load_texture(bytes, textureName, "png")
-            end
-
-            images[i] = textureName
-        end
-    end
-
-    for i, texture in ipairs(gltfTable.textures) do
-        if texture.sampler then
-            print("warning: texture samplers is not supported by this loader. texture will be loaded with default render engine parameters")
-        end
-
-        local textureName
-
-        if not texture.source then
-            textureName = "notfound"
-        else
-            if not images[texture.source] then
-                error("image with index " .. texture.source .. " used at texture " .. i .. " is undefined")
-            else
-                textureName = images[texture.source]
-            end
-        end
-
-        textures[i] = textureName
     end
 
 
