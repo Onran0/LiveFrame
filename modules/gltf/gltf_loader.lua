@@ -14,6 +14,8 @@
    limitations under the License.
 ]]--
 
+local quat_math = require "util/math/quat_math"
+
 local supportedVersion = "2.0"
 
 local bufferMediaTypes = {
@@ -21,9 +23,12 @@ local bufferMediaTypes = {
     "application/gltf-buffer"
 }
 
+local pngMediaType = "image/png"
+local jpegMediaType = "image/jpeg"
+
 local imageMediaTypes = {
-    "image/png",
-    "image/jpeg"
+    pngMediaType,
+    jpegMediaType
 }
 
 local SIGNED_BYTE = 5120
@@ -114,6 +119,52 @@ local matrixRowsCount = {
     [MAT4] = 4
 }
 
+local attrPosition = "POSITION"
+local attrNormal = "NORMAL"
+local attrTangent = "TANGENT"
+local attrTexCoord = "TEXCOORD"
+local attrColor = "COLOR"
+local attrJoints = "JOINTS"
+local attrWeights = "WEIGHTS"
+
+local attrTexCoord0 = attrTexCoord .. "_0"
+local attrColor0 = attrColor .. "_0"
+
+local meshPrimitiveAttributes = {
+    attrPosition,
+    attrNormal,
+    attrTangent,
+    attrTexCoord,
+    attrColor,
+    attrJoints,
+    attrWeights
+}
+
+local supportedMeshPrimitiveAttributes = {
+    attrPosition,
+    attrNormal,
+    attrTexCoord0,
+    attrColor0
+}
+
+local meshPrimitiveAttributeValueTypes = {
+    [attrPosition] = { VEC3 },
+    [attrNormal] = { VEC3 },
+    [attrTexCoord0] = { VEC2 },
+    [attrColor0] = { VEC3, VEC4 }
+}
+
+local indexComponentTypes = {
+    { UNSIGNED_BYTE, UNSIGNED_SHORT, UNSIGNED_INT }
+}
+
+local mayMultiMeshPrimitiveAttributes = {
+    attrTexCoord,
+    attrColor,
+    attrJoints,
+    attrWeights
+}
+
 local function deserializeAccessorElement(type, componentType, bytes, normalized)
     local componentsCount = elementTypeComponentsCount[type]
     local componentFormat = componentTypeFormats[componentType]
@@ -130,8 +181,8 @@ local function deserializeAccessorElement(type, componentType, bytes, normalized
         local columnPaddingBytes = (componentSize * matrixRowsCount[type]) % 4
 
         format = format .. (componentFormat:rep(componentsCount)
-                             .. ("?") -- '?' is boolean format
-                                :rep(columnPaddingBytes)):rep(matrixColumnsCount[type])
+                .. ("?") -- '?' is boolean format
+                :rep(columnPaddingBytes)):rep(matrixColumnsCount[type])
 
         -- padding bytes will be read as booleans
 
@@ -154,7 +205,7 @@ local function deserializeAccessorElement(type, componentType, bytes, normalized
         end
     end
 
-    return components
+    return #components == 1 and components[1] or components
 end
 
 local function deserializeAccessorElements(type, componentType, view, stride, offset, count, normalized)
@@ -193,6 +244,53 @@ local function deserializeAccessorElements(type, componentType, view, stride, of
 
     return elements
 end
+
+local function getAttributeType(name)
+    local separator = name:find("_")
+
+    if separator then
+        return name:sub(1, separator - 1)
+    else return name end
+end
+
+local function isValidAttributeName(name)
+    if not table.has(meshPrimitiveAttributes, name) then
+        local separator = name:find("_")
+
+        if separator then
+            local attribName = name:sub(1, separator - 1)
+            local attribIndex = name:sub(separator + 1, #name)
+
+            if table.has(mayMultiMeshPrimitiveAttributes, attribName) then
+                if attribIndex[1] ~= "0" and tonumber(attribIndex) then
+                    return true
+                end
+            end
+        end
+    else return true end
+end
+
+local PRIMITIVE_MODE_POINT = 0
+local PRIMITIVE_MODE_LINE_STRIPS = 1
+local PRIMITIVE_MODE_LINE_LOOPS = 2
+local PRIMITIVE_MODE_LINES = 3
+local PRIMITIVE_MODE_TRIANGLES = 4
+local PRIMITIVE_MODE_TRIANGLE_STRIPS = 5
+local PRIMITIVE_MODE_TRIANGLE_FANS = 6
+
+local primitiveModes = {
+    PRIMITIVE_MODE_POINT,
+    PRIMITIVE_MODE_LINE_STRIPS,
+    PRIMITIVE_MODE_LINE_LOOPS,
+    PRIMITIVE_MODE_LINES,
+    PRIMITIVE_MODE_TRIANGLES,
+    PRIMITIVE_MODE_TRIANGLE_STRIPS,
+    PRIMITIVE_MODE_TRIANGLE_FANS
+}
+
+local supportedPrimitiveModes = {
+    PRIMITIVE_MODE_TRIANGLES
+}
 
 local function splitVersionToMajorMinor(strVersion)
     if strVersion:find(".", 1, true) then
@@ -312,6 +410,7 @@ function M.load(value, loadSettings)
         for i, node in ipairs(gltfTable.nodes) do
             local destNodeTable = {
                 name = node.name,
+                mesh = node.mesh,
                 translation = node.translation or { 0, 0, 0 },
                 rotation = node.rotation or { 1, 0, 0, 0 },
                 scale = node.scale or { 1, 1, 1 }
@@ -331,6 +430,17 @@ function M.load(value, loadSettings)
                 destNodeTable.translation = decomposed.translation
                 destNodeTable.rotation = decomposed.quaternion
                 destNodeTable.scale = decomposed.scale
+                destNodeTable.matrix = node.matrix
+            else
+                destNodeTable.matrix = mat4.mul(
+                        mat4.mul(
+                                mat4.translate(destNodeTable.translation),
+                                mat4.from_quat(
+                                        quat_math.normalize(quat_math.from_xyzw(destNodeTable.rotation))
+                                )
+                        ),
+                        mat4.scale(destNodeTable.scale)
+                )
             end
 
             nodes[i] = destNodeTable
@@ -349,6 +459,14 @@ function M.load(value, loadSettings)
                 nodes[i].children = children
             end
         end
+    end
+
+    local function getNodeGlobalMatrix(node)
+        if node.parent then
+            local parentGlobalMatrix = getNodeGlobalMatrix(nodes[node.parent])
+
+            return mat4.mul(parentGlobalMatrix, node.matrix)
+        else return node.matrix end
     end
 
     local scenes = { }
@@ -386,12 +504,38 @@ function M.load(value, loadSettings)
     local bufferViews = { }
     local accessors = { }
 
+    local function getBufferView(index)
+        local bufferView = bufferViews[index + 1]
+
+        if not bufferView then
+            error("buffer view with index " .. index .. " is not exists")
+        end
+
+        return bufferView
+    end
+
+    local function getAccessor(index)
+        local accessor = accessors[index + 1]
+
+        if not accessor then
+            error("accessor with index " .. index .. " is not exists")
+        end
+
+        return accessor
+    end
+
     for i, bufferInfo in ipairs(gltfTable.buffers) do
         buffers[i] = loadBufferData(bufferInfo, loadSettings)
     end
 
     for i, bufferViewInfo in ipairs(gltfTable.bufferViews) do
-        local srcBuffer = buffers[bufferViewInfo.buffer + 1]
+        local bufIndex = bufferViewInfo.buffer + 1
+
+        local srcBuffer = buffers[bufIndex]
+
+        if not srcBuffer then
+            error("buffer with index " .. (bufIndex - 1) .. " is not exists")
+        end
 
         local viewedBuffer = srcBuffer:slice(
             bufferViewInfo.byteOffset + 1,
@@ -424,7 +568,7 @@ function M.load(value, loadSettings)
         local elements
 
         if accessorInfo.bufferView then
-            local bufferViewData = bufferViews[accessorInfo.bufferView]
+            local bufferViewData = getBufferView(accessorInfo.bufferView)
 
             elements = deserializeAccessorElements(
                     type, componentType,
@@ -457,7 +601,11 @@ function M.load(value, loadSettings)
                 error("componentType " .. indicesInfo.componentType " in accessor.sparse.indices is unknown or non-integer (float)")
             end
 
-            local indicesBufferViewData = bufferViews[indicesInfo.bufferView]
+            local indicesBufferViewData = getBufferView(indicesInfo.bufferView)
+
+            if not table.has(indexComponentTypes, indicesInfo.componentType) then
+                error("componentType " .. indicesInfo.componentType .. " can't be used for indices")
+            end
 
             local indices = deserializeAccessorElements(
                     SCALAR, indicesInfo.componentType,
@@ -466,21 +614,133 @@ function M.load(value, loadSettings)
                     false
             )
 
-            local valuesBufferViewData = bufferViews[valuesInfo.bufferView]
+            local valuesBufferViewData = getBufferView(valuesInfo.bufferView)
 
             local values = deserializeAccessorElements(
                     type, componentType,
                     valuesBufferViewData.view, valuesBufferViewData.stride,
                     valuesInfo.byteOffset, sparseCount,
-                    false
+                    normalized
             )
 
             for j = 1, sparseCount do
-                elements[indices[j][1] + 1] = values[j]
+                elements[indices[j] + 1] = values[j]
             end
         end
 
-        accessors[i] = elements
+        accessors[i] = {
+            type = type,
+            componentType = componentType,
+            values = elements,
+            normalized = normalized
+        }
+    end
+
+    local meshes = { }
+
+    for _, meshInfo in ipairs(gltfTable.meshes) do
+        local primitives = { }
+
+        for _, primitiveInfo in ipairs(meshInfo.primitives) do
+            if not table.has(primitiveModes, primitiveInfo.mode) then
+                error("invalid mesh primitive mode: " .. primitiveInfo.mode)
+            end
+
+            if not table.has(supportedPrimitiveModes, primitiveInfo.mode) then
+                print(
+                        "warning: mesh primitives with mode " ..
+                        primitiveInfo.mode .. " is not supported by this loader. skipping it"
+                )
+            else
+                local attributes = { }
+
+                local prevAttribAccessorCount
+
+                for attribName, attribAccessorIndex in pairs(primitiveInfo.attributes) do
+                    if not isValidAttributeName(attribName) then
+                        error("invalid mesh primitive attribute name: " .. attribName)
+                    end
+
+                    if table.has(supportedMeshPrimitiveAttributes, attribName) then
+                        local accessor = getAccessor(attribAccessorIndex)
+
+                        local attributeValueType = meshPrimitiveAttributeValueTypes[getAttributeType(attribName)]
+
+                        if not table.has(attributeValueType, accessor.type) then
+                            error(
+                                    "accessor type doesn't match to mesh primitive attribute value type: "
+                                            .. accessor.type .. " != " .. table.concat(attributeValueType, " or ")
+                            )
+                        end
+
+                        if prevAttribAccessorCount then
+                            if prevAttribAccessorCount ~= #accessor.values then
+                                error("accessor of mesh primitive attribute " .. attribName .. " have different elements count")
+                            end
+                        end
+
+                        prevAttribAccessorCount = #accessor.values
+
+                        table.insert(attributes, {
+                            type = attribName,
+                            values = accessor.values
+                        })
+                    else
+                        print("warning: mesh primitive attributes of type " .. attribName .. " is not supported by this loader. skipping it")
+                    end
+                end
+
+                local indices = { }
+
+                local attrsCount = table.count_pairs(primitiveInfo.attributes)
+
+                if primitiveInfo.indices then
+                    local gltfIndices = getAccessor(primitiveInfo.indices)
+
+                    if not table.has(indexComponentTypes, gltfIndices.componentType) then
+                        error("componentType " .. gltfIndices.componentType .. " can't be used for mesh primitive indices")
+                    end
+
+                    if gltfIndices.normalized then
+                        error("accessor used for mesh primitive indices can't be normalized")
+                    end
+
+                    gltfIndices = gltfIndices.values
+
+                    for i = 0, #gltfIndices - 1 do
+                        local idx = gltfIndices[i + 1]
+
+                        for j = 1, attrsCount do
+                            indices[i * attrsCount + j] = idx
+                        end
+                    end
+                else
+                    -- count of accessor for any attribute in mesh.primitive.attributes is equal
+                    -- to primitive vertices count when mesh.primitive.indices undefined
+                    for i = 0, prevAttribAccessorCount - 1 do
+                        for j = 1, attrsCount do
+                            indices[i * attrsCount + j] = i
+                        end
+                    end
+                end
+
+                table.insert(primitives, {
+                    attributes = attributes,
+                    indices = indices,
+                    material = primitiveInfo.material
+                })
+            end
+        end
+
+        table.insert(meshes, {
+            primitives = primitives
+        })
+    end
+
+    for _, node in ipairs(nodes) do
+        if node.mesh and not meshes[node.mesh] then
+            error("node " .. node.name .. " using undefined mesh with index " .. node.mesh)
+        end
     end
 
 
