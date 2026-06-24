@@ -332,6 +332,8 @@ function M.load(value, loadSettings)
                 destNodeTable.rotation = decomposed.quaternion
                 destNodeTable.scale = decomposed.scale
             end
+
+            nodes[i] = destNodeTable
         end
 
         for i, node in ipairs(gltfTable.nodes) do
