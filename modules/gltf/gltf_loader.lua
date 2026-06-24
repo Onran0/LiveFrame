@@ -26,9 +26,16 @@ local bufferMediaTypes = {
 local pngMediaType = "image/png"
 local jpegMediaType = "image/jpeg"
 
+local pngMagic = Bytearray({ 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A })
+local jpegMagic = Bytearray({ 0xFF, 0xD8, 0xFF })
+
 local imageMediaTypes = {
     pngMediaType,
     jpegMediaType
+}
+
+local supportedImageMediaTypes = {
+    pngMediaType
 }
 
 local SIGNED_BYTE = 5120
@@ -164,6 +171,30 @@ local mayMultiMeshPrimitiveAttributes = {
     attrJoints,
     attrWeights
 }
+
+local function bytearrayStartsWith(bytes, startBytes)
+    if #bytes < #startBytes then
+        return false
+    end
+
+    for i = 1, #startBytes do
+        if bytes[i] ~= startBytes[i] then
+            return false
+        end
+    end
+
+    return true
+end
+
+local function getMimeType(bytes)
+    if bytearrayStartsWith(bytes, jpegMagic) then
+        return jpegMediaType
+    elseif bytearrayStartsWith(bytes, pngMagic) then
+        return pngMediaType
+    else
+        return nil
+    end
+end
 
 local function deserializeAccessorElement(type, componentType, bytes, normalized)
     local componentsCount = elementTypeComponentsCount[type]
@@ -308,6 +339,8 @@ local function splitVersionToMajorMinor(strVersion)
     error("invalid version format: " .. strVersion)
 end
 
+local uniqueModelIndex = 0
+
 local majorSupportedVersion, minorSupportedVersion = splitVersionToMajorMinor(supportedVersion)
 
 local M = { }
@@ -318,69 +351,60 @@ function unescapeUri(uri)
     end)
 end
 
-function loadBufferData(bufferInfo, loadSettings)
+function loadBytearrayFromURI(srcUri, sourceFile)
     local bytes
 
-    if bufferInfo.uri then
-        local srcUri = bufferInfo.uri
-        local uri = unescapeUri(srcUri)
+    local uri = unescapeUri(srcUri)
 
-        local colon = uri:find("/", 1, true)
+    local colon = uri:find("/", 1, true)
 
-        local firstSegment = colon and uri:sub(1, colon - 1) or uri
+    local firstSegment = colon and uri:sub(1, colon - 1) or uri
 
-        local schemeNameEnd = firstSegment:find(":", 1, true)
+    local schemeNameEnd = firstSegment:find(":", 1, true)
 
-        if not schemeNameEnd then -- path-noscheme / ipath-noscheme
-            local path = file.join(file.parent(loadSettings.sourceFilePath), uri)
+    if not schemeNameEnd then -- path-noscheme / ipath-noscheme
+        local path = file.join(file.parent(sourceFile), uri)
 
-            if not file.exists(path) then
-                error("buffer file doesn't exists: " .. path)
-            end
-
-            bytes = file.read_bytes(path)
-        else
-            local schemeEnd = uri:find(":", 1, true)
-
-            local scheme = uri:sub(1, schemeEnd - 1)
-
-            if scheme == "data" then
-                local commaPos = uri:find(",", 1, true)
-
-                if not commaPos then
-                    error("invalid data uri: " .. srcUri)
-                end
-
-                local firstSemicolon = uri:find(";", 1, true)
-
-                local mediaType = uri:sub(schemeEnd + 1, firstSemicolon - 1)
-
-                if not table.has(bufferMediaTypes, mediaType) then
-                    error("invalid media type for buffer: " .. mediaType)
-                end
-
-                local params = uri:sub(firstSemicolon, commaPos)
-
-                if params ~= ";base64," then
-                    error("unsupported data uri parameters for buffer: " .. params)
-                end
-
-                local payload = uri:sub(commaPos + 1)
-
-                bytes = base64.decode(payload)
-            else
-                error("unsupported uri scheme: " .. scheme)
-            end
+        if not file.exists(path) then
+            error("buffer file doesn't exists: " .. path)
         end
+
+        bytes = file.read_bytes(path)
     else
-        bytes = loadSettings.binaryChunk:slice(1, bufferInfo.byteLength)
+        local schemeEnd = uri:find(":", 1, true)
+
+        local scheme = uri:sub(1, schemeEnd - 1)
+
+        if scheme == "data" then
+            local commaPos = uri:find(",", 1, true)
+
+            if not commaPos then
+                error("invalid data uri: " .. srcUri)
+            end
+
+            local firstSemicolon = uri:find(";", 1, true)
+
+            local mediaType = uri:sub(schemeEnd + 1, firstSemicolon - 1)
+
+            if not table.has(bufferMediaTypes, mediaType) then
+                error("invalid media type for buffer: " .. mediaType)
+            end
+
+            local params = uri:sub(firstSemicolon, commaPos)
+
+            if params ~= ";base64," then
+                error("unsupported data uri parameters for buffer: " .. params)
+            end
+
+            local payload = uri:sub(commaPos + 1)
+
+            bytes = base64.decode(payload)
+        else
+            error("unsupported uri scheme: " .. scheme)
+        end
     end
 
-    if #bytes == bufferInfo.byteLength then
-        return bytes
-    else
-        return bytes:slice(1, bufferInfo.byteLength)
-    end
+    return bytes
 end
 
 function M.load(value, loadSettings)
@@ -403,6 +427,8 @@ function M.load(value, loadSettings)
             error("glTF files with version " .. majorVersion .. ".x is not supported by this loader")
         end
     end
+
+    uniqueModelIndex = uniqueModelIndex + 1
 
     local nodes = { }
 
@@ -525,7 +551,19 @@ function M.load(value, loadSettings)
     end
 
     for i, bufferInfo in ipairs(gltfTable.buffers) do
-        buffers[i] = loadBufferData(bufferInfo, loadSettings)
+        local bytes
+
+        if bufferInfo.uri then
+            bytes = loadBytearrayFromURI(bufferInfo.uri, loadSettings.sourceFile)
+        else
+            bytes = loadSettings.binaryChunk
+        end
+
+        if #bytes == bufferInfo.byteLength then
+            buffers[i] = bytes
+        else
+            buffers[i] = bytes:slice(1, bufferInfo.byteLength)
+        end
     end
 
     for i, bufferViewInfo in ipairs(gltfTable.bufferViews) do
@@ -741,6 +779,75 @@ function M.load(value, loadSettings)
         if node.mesh and not meshes[node.mesh] then
             error("node " .. node.name .. " using undefined mesh with index " .. node.mesh)
         end
+    end
+
+    local images = { }
+    local textures = { }
+
+    for i, image in ipairs(gltfTable.images) do
+        local bytes, mimeType
+
+        if image.bufferView then
+            if not image.mimeType then
+                error("image refers to bufferView must define mimeType")
+            end
+
+            bytes = getBufferView(image.bufferView).view
+            mimeType = image.mimeType
+        elseif image.uri then
+            bytes = loadBytearrayFromURI(image.uri, loadSettings.sourceFile)
+
+            if image.mimeType then
+                mimeType = image.mimeType
+            else
+                mimeType = getMimeType(bytes)
+
+                if not mimeType then
+                    error("failed to determine mimeType of image at index " .. i)
+                end
+            end
+        end
+
+        if not table.has(imageMediaTypes, mimeType) then
+            error("unknown mimeType of image at index " .. i)
+        end
+
+        if not table.has(supportedImageMediaTypes, mimeType) then
+            print(
+                    "warning: images of mimeType=" ..
+                    mimeType .. " is not supported by this loader. image will be replaced with a placeholder"
+            )
+
+            images[i] = "notfound"
+        else
+            local textureName = "lf_gltf_" .. uniqueModelIndex .. "_" .. i
+
+            if mimeType == pngMediaType then
+                assets.load_texture(bytes, textureName, "png")
+            end
+
+            images[i] = textureName
+        end
+    end
+
+    for i, texture in ipairs(gltfTable.textures) do
+        if texture.sampler then
+            print("warning: texture samplers is not supported by this loader. texture will be loaded with default render engine parameters")
+        end
+
+        local textureName
+
+        if not texture.source then
+            textureName = "notfound"
+        else
+            if not images[texture.source] then
+                error("image with index " .. texture.source .. " used at texture " .. i .. " is undefined")
+            else
+                textureName = images[texture.source]
+            end
+        end
+
+        textures[i] = textureName
     end
 
 
