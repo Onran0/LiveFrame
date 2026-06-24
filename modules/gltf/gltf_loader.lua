@@ -415,7 +415,7 @@ function loadBytearrayFromURI(srcUri, sourceFile)
     return bytes
 end
 
-function M.load(value, loadSettings)
+function M.extract_gltf_data(value, loadSettings)
     local gltfTable = json.parse(value)
 
     if not gltfTable.asset or not gltfTable.asset.version then
@@ -903,6 +903,19 @@ function M.load(value, loadSettings)
             error("node " .. node.name .. " using undefined mesh with index " .. node.mesh)
         end
     end
+
+    -- TODO: animations parsing
+    -- TODO: selection of nodes and meshes by scene
+    -- TODO: meshes duplication with inverted vertices winding for nodes with negative global matrix determinant
+
+    return {
+        nodes = nodes,
+        meshes = meshes
+    }
+end
+
+function M.load(value, loadSettings)
+    local data = M.extract_gltf_data(value, loadSettings)
 
 
 end
