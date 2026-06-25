@@ -1278,6 +1278,66 @@ function M.extract_gltf_data(rawJson, loadSettings)
         end
     end
 
+    --[[
+    nodes = {
+        {
+            name: string,
+            mesh: int,
+            translation: vec3,
+            rotation: quat,
+            scale: vec3,
+            matrix: mat4,
+            [optional] children: table<int>,
+            [optional] parent: int
+        },
+        ...
+    },
+
+    meshes = {
+        {
+            primitives: {
+                {
+                    attributes = {
+                        {
+                            type: string, -- may POSITION|NORMAL|TEXCOORD_0|COLOR_0
+                            values: any -- vec3 for POSITION, NORMAL; vec2 for TEXCOORD_0; vec3|vec4 for COLOR_0
+                        }
+                    },
+                    indices: table<int> -- { [attr_1_value_1], [attr_2_value_1], [attr_3_value_1], ... } , every 3 indices is one vertex
+                    material = {
+                        texture: string
+                    }
+                },
+                ...
+            }
+        },
+        ...
+    },
+
+    animations = {
+        {
+            name: string,
+            nodes = {
+                [targetNodeIndex] = {
+                    [targetPath] = { -- may "translation|rotation|scale"
+                        interpolation: string -- may "STEP|LINEAR|CUBICSPLINE",
+                        keyframes = {
+                            { -- in/out Tangents defined only when interpolation == "CUBICSPLINE"
+                                time: number,
+                                value: vec3|vec4,
+                                [optional] inTangent: vec3|vec4,
+                                [optional] outTangent: vec3|vec4
+                            },
+                            ...
+                        }
+                    }
+                },
+                ...
+            }
+        },
+        ...
+    }
+    ]]--
     return {
         nodes = finalNodes,
         meshes = finalMeshes,
