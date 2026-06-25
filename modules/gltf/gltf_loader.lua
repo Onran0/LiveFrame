@@ -809,6 +809,8 @@ function M.extract_gltf_data(value, loadSettings)
             else
                 local attributes = { }
 
+                local supportedAttrsCount = 0
+
                 local prevAttribAccessorCount
 
                 for attribName, attribAccessorIndex in pairs(primitiveInfo.attributes) do
@@ -840,14 +842,14 @@ function M.extract_gltf_data(value, loadSettings)
                             type = attribName,
                             values = accessor.values
                         })
+
+                        supportedAttrsCount = supportedAttrsCount + 1
                     else
                         warning("mesh primitive attributes of type " .. attribName .. " is not supported by this loader. skipping it")
                     end
                 end
 
                 local indices = { }
-
-                local attrsCount = table.count_pairs(primitiveInfo.attributes)
 
                 if primitiveInfo.indices then
                     local gltfIndices = getAccessor(primitiveInfo.indices)
@@ -865,16 +867,16 @@ function M.extract_gltf_data(value, loadSettings)
                     for i = 0, #gltfIndices - 1 do
                         local idx = gltfIndices[i + 1]
 
-                        for j = 1, attrsCount do
-                            indices[i * attrsCount + j] = idx
+                        for j = 1, supportedAttrsCount do
+                            indices[i * supportedAttrsCount + j] = idx
                         end
                     end
                 else
                     -- count of accessor for any attribute in mesh.primitive.attributes is equal
                     -- to primitive vertices count when mesh.primitive.indices undefined
                     for i = 0, prevAttribAccessorCount - 1 do
-                        for j = 1, attrsCount do
-                            indices[i * attrsCount + j] = i
+                        for j = 1, supportedAttrsCount do
+                            indices[i * supportedAttrsCount + j] = i
                         end
                     end
                 end
