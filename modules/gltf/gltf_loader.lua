@@ -704,7 +704,9 @@ function M.extract_gltf_data(rawJson, loadSettings)
             bytes = loadSettings.binaryChunk
         end
 
-        if #bytes == bufferInfo.byteLength then
+        if #bytes < bufferInfo.byteLength then
+            error("buffer length is less than buffer.byteLength (" .. #bytes .. " < " .. bufferInfo.byteLength .. ")")
+        elseif #bytes == bufferInfo.byteLength then
             buffers[i] = bytes
         else
             buffers[i] = bytes:slice(1, bufferInfo.byteLength)
@@ -720,8 +722,15 @@ function M.extract_gltf_data(rawJson, loadSettings)
             error("buffer with index " .. (bufIndex - 1) .. " is not exists")
         end
 
+        local off = bufferViewInfo.byteOffset
+        local requiredLength = off + bufferViewInfo.byteLength
+
+        if requiredLength < #srcBuffer then
+            error("length of pointed buffer is less than bufferView.byteLength (required " .. requiredLength .. " bytes, got " .. #srcBuffer .. ")")
+        end
+
         local viewedBuffer = srcBuffer:slice(
-            bufferViewInfo.byteOffset + 1,
+            off + 1,
             bufferViewInfo.byteLength
         )
 
