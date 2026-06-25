@@ -325,6 +325,47 @@ local supportedPrimitiveModes = {
     PRIMITIVE_MODE_TRIANGLES
 }
 
+local targetTranslationPath = "translation"
+local targetRotationPath = "rotation"
+local targetScalePath = "scale"
+local targetWeightsPath = "weights"
+
+local animationChannelTargetPaths = {
+    targetTranslationPath,
+    targetRotationPath,
+    targetScalePath,
+    targetWeightsPath
+}
+
+local supportedAnimationChannelTargetPaths = {
+    targetTranslationPath,
+    targetRotationPath,
+    targetScalePath
+}
+
+local animationChannelTargetPathDataTypes = {
+    [targetTranslationPath] = VEC3,
+    [targetRotationPath] = VEC4,
+    [targetScalePath] = VEC3,
+    [targetWeightsPath] = SCALAR
+}
+
+local animationInterpolationTypeStep = "STEP"
+local animationInterpolationTypeLinear = "LINEAR"
+local animationInterpolationTypeCubicSpline = "CUBICSPLINE"
+
+local animationInterpolationTypes = {
+    animationInterpolationTypeStep,
+    animationInterpolationTypeLinear,
+    animationInterpolationTypeCubicSpline
+}
+
+local supportedAnimationInterpolationTypes = {
+    animationInterpolationTypeStep,
+    animationInterpolationTypeLinear,
+    animationInterpolationTypeCubicSpline
+}
+
 local function splitVersionToMajorMinor(strVersion)
     if strVersion:find(".", 1, true) then
         local split = strVersion:split(".")
@@ -353,13 +394,34 @@ local majorSupportedVersion, minorSupportedVersion = splitVersionToMajorMinor(su
 
 local M = { }
 
-function unescapeUri(uri)
+local nodeNameCharsToEscape = {
+    "\\",
+    "/"
+}
+
+local function escapeNodeName(name)
+    local escapedName = ""
+
+    for i = 1, utf8.length(name) do
+        local char = utf8.sub(name, i, i)
+
+        if table.has(nodeNameCharsToEscape, char) then
+            escapedName = escapedName .. "\\"
+        end
+
+        escapedName = escapedName .. char
+    end
+
+    return escapedName
+end
+
+local function unescapeUri(uri)
     return uri:gsub("%%(%x%x)", function(hex)
         return string.char(tonumber(hex, 16))
     end)
 end
 
-function loadBytearrayFromURI(srcUri, sourceFile)
+local function loadBytearrayFromURI(srcUri, sourceFile)
     local bytes
 
     local uri = unescapeUri(srcUri)
@@ -415,8 +477,18 @@ function loadBytearrayFromURI(srcUri, sourceFile)
     return bytes
 end
 
-function M.extract_gltf_data(value, loadSettings)
-    local gltfTable = json.parse(value)
+function M.get_node_name_in_skeleton(nameChain)
+    local escapedNameChain = { }
+
+    for i = 1, #nameChain do
+        escapedNameChain[i] = escapeNodeName(nameChain[i])
+    end
+
+    return table.concat(escapedNameChain, "/")
+end
+
+function M.extract_gltf_data(rawJson, loadSettings)
+    local gltfTable = json.parse(rawJson)
 
     if not gltfTable.asset or not gltfTable.asset.version then
         error("invalid glTF")
@@ -444,7 +516,7 @@ function M.extract_gltf_data(value, loadSettings)
         for i, node in ipairs(gltfTable.nodes) do
             local destNodeTable = {
                 name = node.name,
-                mesh = node.mesh,
+                mesh = node.mesh + 1,
                 translation = node.translation or { 0, 0, 0 },
                 rotation = node.rotation or { 1, 0, 0, 0 },
                 scale = node.scale or { 1, 1, 1 }
@@ -503,6 +575,22 @@ function M.extract_gltf_data(value, loadSettings)
         else return node.matrix end
     end
 
+    local function getUniqueNodeName(node)
+        if node.parent then
+            local parentNameChain = getUniqueNodeName(nodes[node.parent])
+
+            return parentNameChain .. "/" .. escapeNodeName(node.name)
+        else return escapeNodeName(node.name) end
+    end
+
+    local function getUpperNodeParentIndex(nodeIndex)
+        local parent = nodes[nodeIndex].parent
+
+        if parent then
+            return getUpperNodeParentIndex(parent)
+        else return nodeIndex end
+    end
+
     local scenes = { }
 
     for i, scene in ipairs(gltfTable.scenes) do
@@ -533,6 +621,10 @@ function M.extract_gltf_data(value, loadSettings)
     end
 
     local scene = scenes[sceneIndex]
+
+    local function hasNodeInScene(nodeIndex)
+        return table.has(scene.nodes, getUpperNodeParentIndex(nodeIndex))
+    end
 
     local buffers = { }
     local bufferViews = { }
@@ -686,218 +778,263 @@ function M.extract_gltf_data(value, loadSettings)
     local textures = { }
     local materials = { }
 
-    for i, imageInfo in ipairs(gltfTable.images) do
-        local bytes, mimeType
+    local defaultMaterial = {
+        texture = "white"
+    }
 
-        if imageInfo.bufferView then
-            if not imageInfo.mimeType then
-                error("image refers to bufferView must define mimeType")
-            end
+    if gltfTable.images then
+        for i, imageInfo in ipairs(gltfTable.images) do
+            local bytes, mimeType
 
-            bytes = getBufferView(imageInfo.bufferView).view
-            mimeType = imageInfo.mimeType
-        elseif imageInfo.uri then
-            bytes = loadBytearrayFromURI(imageInfo.uri, loadSettings.sourceFile)
+            if imageInfo.bufferView then
+                if not imageInfo.mimeType then
+                    error("image refers to bufferView must define mimeType")
+                end
 
-            if imageInfo.mimeType then
+                bytes = getBufferView(imageInfo.bufferView).view
                 mimeType = imageInfo.mimeType
-            else
-                mimeType = getMimeType(bytes)
+            elseif imageInfo.uri then
+                bytes = loadBytearrayFromURI(imageInfo.uri, loadSettings.sourceFile)
 
-                if not mimeType then
-                    error("failed to determine mimeType of image at index " .. i)
+                if imageInfo.mimeType then
+                    mimeType = imageInfo.mimeType
+                else
+                    mimeType = getMimeType(bytes)
+
+                    if not mimeType then
+                        error("failed to determine mimeType of image at index " .. i)
+                    end
                 end
             end
-        end
 
-        if not table.has(imageMediaTypes, mimeType) then
-            error("unknown mimeType of image at index " .. i)
-        end
-
-        if not table.has(supportedImageMediaTypes, mimeType) then
-            warning(
-                    "images of mimeType=" ..
-                            mimeType .. " is not supported by this loader. image will be replaced with a placeholder"
-            )
-
-            images[i] = "notfound"
-        else
-            local textureName = "lf_gltf_" .. uniqueModelIndex .. "_" .. i
-
-            if mimeType == pngMediaType then
-                assets.load_texture(bytes, textureName, "png")
+            if not table.has(imageMediaTypes, mimeType) then
+                error("unknown mimeType of image at index " .. i)
             end
 
-            images[i] = textureName
+            if not table.has(supportedImageMediaTypes, mimeType) then
+                warning(
+                        "images of mimeType=" ..
+                                mimeType .. " is not supported by this loader. image will be replaced with a placeholder"
+                )
+
+                images[i] = "notfound"
+            else
+                local textureName = "lf_gltf_" .. uniqueModelIndex .. "_" .. i
+
+                if mimeType == pngMediaType then
+                    assets.load_texture(bytes, textureName, "png")
+                end
+
+                images[i] = textureName
+            end
         end
     end
 
-    for i, textureInfo in ipairs(gltfTable.textures) do
-        if textureInfo.sampler then
-            warning("texture samplers is not supported by this loader. texture will be loaded with default render engine parameters")
-        end
-
-        local textureName
-
-        if not textureInfo.source then
-            textureName = "notfound"
-        else
-            if not images[textureInfo.source] then
-                error("image with index " .. textureInfo.source .. " used at texture " .. i .. " is undefined")
-            else
-                textureName = images[textureInfo.source]
+    if gltfTable.textures then
+        for i, textureInfo in ipairs(gltfTable.textures) do
+            if textureInfo.sampler then
+                warning("texture samplers is not supported by this loader. texture will be loaded with default render engine parameters")
             end
-        end
 
-        textures[i] = textureName
-    end
+            local textureName
 
-    for i, materialInfo in ipairs(gltfTable.materials) do
-        local printWarning = materialInfo.normalTexture
-                or materialInfo.emissiveFactor
-                or materialInfo.alphaMode
-                or materialInfo.alphaCutoff
-                or materialInfo.doubleSided
-
-        local pbr = materialInfo.pbrMetallicRoughness
-
-        local textureName = "white"
-
-        if pbr then
-            printWarning = printWarning
-                    or pbr.baseColorFactor
-                    or pbr.metallicFactor
-                    or pbr.roughnessFactor
-
-            local baseTexture = pbr.baseColorTexture
-
-            if baseTexture then
-                printWarning = printWarning or baseTexture.texCoord ~= 0
-
-                textureName = textures[baseTexture.index]
-
-                if not textureName then
-                    error("texture with index " .. baseTexture.index .. " used in material with index " .. i .. " is undefined")
+            if not textureInfo.source then
+                textureName = "notfound"
+            else
+                if not images[textureInfo.source] then
+                    error("image with index " .. textureInfo.source .. " used at texture " .. i .. " is undefined")
+                else
+                    textureName = images[textureInfo.source]
                 end
             end
+
+            textures[i] = textureName
         end
+    end
 
-        materials[i] = {
-            texture = textureName
-        }
+    if gltfTable.materials then
+        for i, materialInfo in ipairs(gltfTable.materials) do
+            local printWarning = materialInfo.normalTexture
+                    or materialInfo.emissiveFactor
+                    or materialInfo.alphaMode
+                    or materialInfo.alphaCutoff
+                    or materialInfo.doubleSided
 
-        if printWarning then
-            warning("of all materials properties supported only base color texture")
+            local pbr = materialInfo.pbrMetallicRoughness
+
+            local textureName = "white"
+
+            if pbr then
+                printWarning = printWarning
+                        or pbr.baseColorFactor
+                        or pbr.metallicFactor
+                        or pbr.roughnessFactor
+
+                local baseTexture = pbr.baseColorTexture
+
+                if baseTexture then
+                    printWarning = printWarning or baseTexture.texCoord ~= 0
+
+                    textureName = textures[baseTexture.index]
+
+                    if not textureName then
+                        error("texture with index " .. baseTexture.index .. " used in material with index " .. i .. " is undefined")
+                    end
+                end
+            end
+
+            materials[i] = {
+                texture = textureName
+            }
+
+            if printWarning then
+                warning("of all materials properties supported only base color texture")
+            end
         end
     end
 
     local meshes = { }
 
-    for _, meshInfo in ipairs(gltfTable.meshes) do
-        local primitives = { }
+    if gltfTable.meshes then
+        for _, meshInfo in ipairs(gltfTable.meshes) do
+            local primitives = { }
 
-        for _, primitiveInfo in ipairs(meshInfo.primitives) do
-            if not table.has(primitiveModes, primitiveInfo.mode) then
-                error("invalid mesh primitive mode: " .. primitiveInfo.mode)
-            end
+            for _, primitiveInfo in ipairs(meshInfo.primitives) do
+                if not table.has(primitiveModes, primitiveInfo.mode) then
+                    error("invalid mesh primitive mode: " .. primitiveInfo.mode)
+                end
 
-            if not table.has(supportedPrimitiveModes, primitiveInfo.mode) then
-                warning(
-                        "mesh primitives with mode " ..
-                        primitiveInfo.mode .. " is not supported by this loader. skipping it"
-                )
-            else
-                local attributes = { }
+                if not table.has(supportedPrimitiveModes, primitiveInfo.mode) then
+                    warning(
+                            "mesh primitives with mode " ..
+                                    primitiveInfo.mode .. " is not supported by this loader. skipping it"
+                    )
+                else
+                    local attributes = { }
 
-                local supportedAttrsCount = 0
+                    local supportedAttrsCount = 0
 
-                local prevAttribAccessorCount
+                    local prevAttribAccessorCount
 
-                for attribName, attribAccessorIndex in pairs(primitiveInfo.attributes) do
-                    if not isValidAttributeName(attribName) then
-                        error("invalid mesh primitive attribute name: " .. attribName)
-                    end
-
-                    if table.has(supportedMeshPrimitiveAttributes, attribName) then
-                        local accessor = getAccessor(attribAccessorIndex)
-
-                        local attributeValueType = meshPrimitiveAttributeValueTypes[getAttributeType(attribName)]
-
-                        if not table.has(attributeValueType, accessor.type) then
-                            error(
-                                    "accessor type doesn't match to mesh primitive attribute value type: "
-                                            .. accessor.type .. " != " .. table.concat(attributeValueType, " or ")
-                            )
+                    for attribName, attribAccessorIndex in pairs(primitiveInfo.attributes) do
+                        if not isValidAttributeName(attribName) then
+                            error("invalid mesh primitive attribute name: " .. attribName)
                         end
 
-                        if prevAttribAccessorCount then
-                            if prevAttribAccessorCount ~= #accessor.values then
-                                error("accessor of mesh primitive attribute " .. attribName .. " have different elements count")
+                        if table.has(supportedMeshPrimitiveAttributes, attribName) then
+                            local accessor = getAccessor(attribAccessorIndex)
+
+                            local attributeValueType = meshPrimitiveAttributeValueTypes[getAttributeType(attribName)]
+
+                            if not table.has(attributeValueType, accessor.type) then
+                                error(
+                                        "accessor type doesn't match to mesh primitive attribute value type: "
+                                                .. accessor.type .. " != " .. table.concat(attributeValueType, " or ")
+                                )
+                            end
+
+                            if prevAttribAccessorCount then
+                                if prevAttribAccessorCount ~= #accessor.values then
+                                    error("accessor of mesh primitive attribute " .. attribName .. " have different elements count")
+                                end
+                            end
+
+                            prevAttribAccessorCount = #accessor.values
+
+                            table.insert(attributes, {
+                                type = attribName,
+                                values = accessor.values
+                            })
+
+                            supportedAttrsCount = supportedAttrsCount + 1
+                        else
+                            warning("mesh primitive attributes of type " .. attribName .. " is not supported by this loader. skipping it")
+                        end
+                    end
+
+                    local indices = { }
+
+                    if primitiveInfo.indices then
+                        local gltfIndices = getAccessor(primitiveInfo.indices)
+
+                        if not table.has(indexComponentTypes, gltfIndices.componentType) then
+                            error("componentType " .. gltfIndices.componentType .. " can't be used for mesh primitive indices")
+                        end
+
+                        if gltfIndices.normalized then
+                            error("accessor used for mesh primitive indices can't be normalized")
+                        end
+
+                        gltfIndices = gltfIndices.values
+
+                        for i = 0, #gltfIndices - 1 do
+                            local idx = gltfIndices[i + 1]
+
+                            for j = 1, supportedAttrsCount do
+                                indices[i * supportedAttrsCount + j] = idx
                             end
                         end
-
-                        prevAttribAccessorCount = #accessor.values
-
-                        table.insert(attributes, {
-                            type = attribName,
-                            values = accessor.values
-                        })
-
-                        supportedAttrsCount = supportedAttrsCount + 1
                     else
-                        warning("mesh primitive attributes of type " .. attribName .. " is not supported by this loader. skipping it")
-                    end
-                end
-
-                local indices = { }
-
-                if primitiveInfo.indices then
-                    local gltfIndices = getAccessor(primitiveInfo.indices)
-
-                    if not table.has(indexComponentTypes, gltfIndices.componentType) then
-                        error("componentType " .. gltfIndices.componentType .. " can't be used for mesh primitive indices")
-                    end
-
-                    if gltfIndices.normalized then
-                        error("accessor used for mesh primitive indices can't be normalized")
-                    end
-
-                    gltfIndices = gltfIndices.values
-
-                    for i = 0, #gltfIndices - 1 do
-                        local idx = gltfIndices[i + 1]
-
-                        for j = 1, supportedAttrsCount do
-                            indices[i * supportedAttrsCount + j] = idx
+                        -- count of accessor for any attribute in mesh.primitive.attributes is equal
+                        -- to primitive vertices count when mesh.primitive.indices undefined
+                        for i = 0, prevAttribAccessorCount - 1 do
+                            for j = 1, supportedAttrsCount do
+                                indices[i * supportedAttrsCount + j] = i
+                            end
                         end
                     end
-                else
-                    -- count of accessor for any attribute in mesh.primitive.attributes is equal
-                    -- to primitive vertices count when mesh.primitive.indices undefined
-                    for i = 0, prevAttribAccessorCount - 1 do
-                        for j = 1, supportedAttrsCount do
-                            indices[i * supportedAttrsCount + j] = i
+
+                    local material
+
+                    if primitiveInfo.material then
+                        material = materials[primitiveInfo.material]
+
+                        if not material then
+                            error("material with index " .. primitiveInfo.material .. " used in some mesh primitive is undefined")
                         end
+                    else
+                        material = defaultMaterial
                     end
+
+                    table.insert(primitives, {
+                        attributes = attributes,
+                        indices = indices,
+                        material = material
+                    })
                 end
+            end
 
-                local material = materials[primitiveInfo.material]
+            table.insert(meshes, {
+                primitives = primitives
+            })
+        end
+    end
 
-                if not material then
-                    error("material with index " .. primitiveInfo.material .. " used in some mesh primitive is undefined")
+    local function getMeshCopyWithInvertedWinding(mesh)
+        local invMesh = table.deep_copy(mesh)
+
+        for _, primitive in ipairs(invMesh.primitives) do
+            local indices = primitive.indices
+            local attrsCount = #primitive.attributes
+
+            local trianglesCount = #indices / attrsCount / 3
+
+            for triangleIndex = 0, trianglesCount - 1 do
+                local vertexIndex = triangleIndex * 3
+
+                for attrIndex = 1, attrsCount do
+                    local attrIndexInVertexA = vertexIndex * attrsCount + attrIndex
+                    local attrIndexInVertexC = (vertexIndex + 2) * attrsCount + attrIndex
+
+                    local temp = indices[attrIndexInVertexC]
+
+                    indices[attrIndexInVertexC] = indices[attrIndexInVertexA]
+                    indices[attrIndexInVertexA] = temp
                 end
-
-                table.insert(primitives, {
-                    attributes = attributes,
-                    indices = indices,
-                    material = material
-                })
             end
         end
 
-        table.insert(meshes, {
-            primitives = primitives
-        })
+        return invMesh
     end
 
     for _, node in ipairs(nodes) do
@@ -906,13 +1043,191 @@ function M.extract_gltf_data(value, loadSettings)
         end
     end
 
-    -- TODO: animations parsing
-    -- TODO: selection of nodes and meshes by scene
-    -- TODO: meshes duplication with inverted vertices winding for nodes with negative global matrix determinant
+    local animations = { }
+
+    if gltfTable.animations then
+        for _, animationInfo in ipairs(gltfTable.animations) do
+            local usedNodeIndices = { }
+            local nodePathSamplers = { }
+
+            local nodeAnimations = { }
+
+            for _, channelInfo in ipairs(animationInfo.channels) do
+                local target = channelInfo.target
+
+                local nodeIndex = target.node + 1
+
+                if not nodes[nodeIndex] then
+                    error("node with index " .. (nodeIndex - 1) .. " used in animation " .. animationInfo.name .. " is undefined")
+                end
+
+                if hasNodeInScene(nodeIndex) then
+                    local samplerIndex = channelInfo.sampler + 1
+
+                    if not animationInfo.samplers[samplerIndex] then
+                        error("sampler with index " .. (nodeIndex - 1) .. " used in animation " .. animationInfo.name .. " is undefined")
+                    end
+
+                    if not table.has(animationChannelTargetPaths, target.path) then
+                        error("invalid animation channel target path: " .. target.path)
+                    end
+
+                    if table.has(supportedAnimationChannelTargetPaths, target.path) then
+                        table.insert_unique(usedNodeIndices, nodeIndex)
+
+                        local obj = nodePathSamplers[nodeIndex] or { }
+
+                        obj[target.path] = samplerIndex
+
+                        nodePathSamplers[nodeIndex] = obj
+                    else
+                        warning("animation channel targets with path '" .. target.path .. "' is not supported by this loader. skipping it")
+                    end
+                end
+            end
+
+            for _, nodeIndex in ipairs(usedNodeIndices) do
+                for path, samplerIndex in pairs(nodePathSamplers[nodeIndex]) do
+                    local sampler = animationInfo.samplers[samplerIndex]
+
+                    local timesAccessor = getAccessor(sampler.input)
+                    local valuesAccessor = getAccessor(sampler.output)
+
+                    if timesAccessor.type ~= SCALAR or timesAccessor.componentType ~= FLOAT then
+                        error(
+                                "sampler input accessor must have SCALAR type and FLOAT ("
+                                .. FLOAT .. ") component type"
+                        )
+                    end
+
+                    if valuesAccessor.type ~= animationChannelTargetPathDataTypes[path] then
+                        error(
+                                "sampler output accessor must have "
+                                        .. animationChannelTargetPathDataTypes[path]
+                                        .. " type for channel targets with path '" .. path .. "'"
+                        )
+                    end
+
+                    local interpolationType = sampler.interpolation
+
+                    if not table.has(animationInterpolationTypes, interpolationType) then
+                        error("unknown interpolation type " .. interpolationType)
+                    end
+
+                    if table.has(supportedAnimationInterpolationTypes, interpolationType) then
+                        if not nodeAnimations[nodeIndex] then
+                            nodeAnimations[nodeIndex] = { }
+                        end
+
+                        local keyframes = { }
+
+                        local times = timesAccessor.values
+                        local values = valuesAccessor.values
+
+                        for i = 1, #times do
+                            local value, inTangent, outTangent
+
+                            if interpolationType == animationInterpolationTypeCubicSpline then
+                                inTangent = values[(i - 1) * 3 + 1]
+                                value = values[(i - 1) * 3 + 2]
+                                outTangent = values[(i - 1) * 3 + 3]
+
+                                if path == targetRotationPath then
+                                    inTangent = {
+                                        inTangent[4],
+                                        inTangent[1],
+                                        inTangent[2],
+                                        inTangent[3]
+                                    }
+
+                                    value = quat_math.normalize(quat_math.from_xyzw(value))
+
+                                    outTangent = {
+                                        outTangent[4],
+                                        outTangent[1],
+                                        outTangent[2],
+                                        outTangent[3]
+                                    }
+                                end
+                            else
+                                value = values[i]
+                            end
+
+                            keyframes[i] = {
+                                time = times[i],
+                                value = value,
+                                inTangent = inTangent,
+                                outTangent = outTangent
+                            }
+                        end
+
+                        nodeAnimations[nodeIndex][path] = {
+                            interpolation = interpolationType,
+                            keyframes = keyframes
+                        }
+                    else
+                        warning("interpolation type " .. interpolationType .. " is not supported. skipping this channel")
+                    end
+                end
+            end
+
+            table.insert(animations, {
+                name = animationInfo.name,
+                nodes = nodeAnimations
+            })
+        end
+    end
+
+    local finalNodes = { }
+    local finalMeshes = { }
+
+    local windingDefaultMeshesMap = { }
+    local windingInvertedMeshesMap = { }
+
+    for nodeIndex, node in ipairs(nodes) do
+        if hasNodeInScene(nodeIndex) then
+            local nodeCopy = table.deep_copy(node)
+
+            local meshIndex = nodeCopy.mesh
+
+            if mat4.determinant(getNodeGlobalMatrix(nodeCopy)) > 0 then
+                if not windingDefaultMeshesMap[meshIndex] then
+                    table.insert(finalMeshes, meshes[meshIndex])
+                    windingDefaultMeshesMap[meshIndex] = #finalMeshes
+                end
+
+                meshIndex = windingDefaultMeshesMap[meshIndex]
+            else
+                if not windingInvertedMeshesMap[meshIndex] then
+                    table.insert(finalMeshes, getMeshCopyWithInvertedWinding(meshes[meshIndex]))
+                    windingInvertedMeshesMap[meshIndex] = #finalMeshes
+                end
+
+                meshIndex = windingInvertedMeshesMap[meshIndex]
+            end
+
+            nodeCopy.mesh = meshIndex
+
+            if nodeCopy.children then
+                local newChildren = { }
+
+                for _, childIndex in ipairs(nodeCopy.children) do
+                    if hasNodeInScene(childIndex) then
+                        table.insert(newChildren, childIndex)
+                    end
+                end
+
+                nodeCopy.children = newChildren
+            end
+
+            table.insert(finalNodes, nodeCopy)
+        end
+    end
 
     return {
-        nodes = nodes,
-        meshes = meshes
+        nodes = finalNodes,
+        meshes = finalMeshes,
+        animations = animations
     }
 end
 
