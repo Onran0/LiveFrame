@@ -164,7 +164,9 @@ local meshPrimitiveAttributeValueTypes = {
 }
 
 local indexComponentTypes = {
-    { UNSIGNED_BYTE, UNSIGNED_SHORT, UNSIGNED_INT }
+    UNSIGNED_BYTE,
+    UNSIGNED_SHORT,
+    UNSIGNED_INT
 }
 
 local mayMultiMeshPrimitiveAttributes = {
@@ -261,11 +263,13 @@ local function deserializeAccessorElements(type, componentType, view, stride, of
     stride = stride or elementSize
 
     for i = 0, count - 1 do
+        local currentElementSize = elementSize
+
         if isMatrixType and i == count - 1 then
-            elementSize = elementSize - columnPaddingBytes
+            currentElementSize = currentElementSize - columnPaddingBytes
         end
 
-        local elementBytes = view:slice(offset + i * stride + 1, elementSize)
+        local elementBytes = view:slice(offset + i * stride + 1, currentElementSize)
 
         table.insert(elements, deserializeAccessorElement(
                 type,
@@ -286,6 +290,29 @@ local function getAttributeType(name)
     else return name end
 end
 
+local unsignedIntChars = "0123456789"
+
+local function containsOnly(str, from)
+    for i = 1, utf8.length(str) do
+        local char = utf8.sub(str, i, i)
+
+        local correct = false
+
+        for j = 1, utf8.length(from) do
+            if char == utf8.sub(from, j, j) then
+                correct = true
+                break
+            end
+        end
+
+        if not correct then
+            return false
+        end
+    end
+
+    return true
+end
+
 local function isValidAttributeName(name)
     if not table.has(meshPrimitiveAttributes, name) then
         local separator = name:find("_")
@@ -295,7 +322,14 @@ local function isValidAttributeName(name)
             local attribIndex = name:sub(separator + 1, #name)
 
             if table.has(mayMultiMeshPrimitiveAttributes, attribName) then
-                if attribIndex[1] ~= "0" and tonumber(attribIndex) then
+                local fChar = attribIndex[1]
+
+                if
+                    attribIndex == "0"
+                    or (
+                       fChar ~= "0" and fChar ~= "-" and containsOnly(attribIndex, unsignedIntChars)
+                    )
+                then
                     return true
                 end
             end
@@ -393,6 +427,12 @@ local uniqueModelIndex = 0
 local majorSupportedVersion, minorSupportedVersion = splitVersionToMajorMinor(supportedVersion)
 
 local M = { }
+
+local function vec4XyzwToWxyz(vec)
+    return {
+        vec[4], vec[1], vec[2], vec[3]
+    }
+end
 
 local nodeNameCharsToEscape = {
     "\\",
@@ -501,7 +541,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
             error("file requires support of glTF " .. gltfTable.asset.minVersion .. ", but max supported by loader is " .. supportedVersion)
         end
     else
-        local majorVersion = splitVersionToMajorMinor(gltfTable.asset.version)
+        local majorVersion, _ = splitVersionToMajorMinor(gltfTable.asset.version)
 
         if majorSupportedVersion ~= majorVersion then
             error("glTF files with version " .. majorVersion .. ".x is not supported by this loader")
@@ -516,11 +556,14 @@ function M.extract_gltf_data(rawJson, loadSettings)
         for i, node in ipairs(gltfTable.nodes) do
             local destNodeTable = {
                 name = node.name,
-                mesh = node.mesh + 1,
                 translation = node.translation or { 0, 0, 0 },
-                rotation = node.rotation or { 1, 0, 0, 0 },
+                rotation = node.rotation and quat_math.normalize(quat_math.from_xyzw(node.rotation)) or { 1, 0, 0, 0 },
                 scale = node.scale or { 1, 1, 1 }
             }
+
+            if node.mesh then
+                destNodeTable.mesh = node.mesh + 1
+            end
 
             if node.matrix then
                 if node.translation or node.rotation or node.scale then
@@ -541,9 +584,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
                 destNodeTable.matrix = mat4.mul(
                         mat4.mul(
                                 mat4.translate(destNodeTable.translation),
-                                mat4.from_quat(
-                                        quat_math.normalize(quat_math.from_xyzw(destNodeTable.rotation))
-                                )
+                                mat4.from_quat(destNodeTable.rotation)
                         ),
                         mat4.scale(destNodeTable.scale)
                 )
@@ -616,11 +657,15 @@ function M.extract_gltf_data(rawJson, loadSettings)
         sceneIndex = sceneIndex + 1
     else sceneIndex = loadSettings.sceneIndex end
 
-    if sceneIndex then
+    if not sceneIndex then
         error("display scene index is undefined in gltf file, and in load settings")
     end
 
     local scene = scenes[sceneIndex]
+
+    if not scene then
+        error("scene with index " .. sceneIndex .. " is undefined")
+    end
 
     local function hasNodeInScene(nodeIndex)
         return table.has(scene.nodes, getUpperNodeParentIndex(nodeIndex))
@@ -719,7 +764,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
 
             local defaultValue = { }
 
-            for j = 1, elementTypeComponentsCount do
+            for j = 1, elementTypeComponentsCount[type] do
                 defaultValue[j] = 0
             end
 
@@ -736,7 +781,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
             local valuesInfo = sparse.values
 
             if not table.has(integerComponentTypes, indicesInfo.componentType) then
-                error("componentType " .. indicesInfo.componentType " in accessor.sparse.indices is unknown or non-integer (float)")
+                error("componentType " .. indicesInfo.componentType .. " in accessor.sparse.indices is unknown or non-integer (float)")
             end
 
             local indicesBufferViewData = getBufferView(indicesInfo.bufferView)
@@ -762,6 +807,10 @@ function M.extract_gltf_data(rawJson, loadSettings)
             )
 
             for j = 1, sparseCount do
+                if indices[j] >= accessorInfo.count then
+                    error("sparse accessor index " .. indices[j] .. " is >= than accessor.count (" .. accessorInfo.count .. ")")
+                end
+
                 elements[indices[j] + 1] = values[j]
             end
         end
@@ -841,10 +890,12 @@ function M.extract_gltf_data(rawJson, loadSettings)
             if not textureInfo.source then
                 textureName = "notfound"
             else
-                if not images[textureInfo.source] then
-                    error("image with index " .. textureInfo.source .. " used at texture " .. i .. " is undefined")
+                local source = textureInfo.source + 1
+
+                if not images[source] then
+                    error("image with index " .. source .. " used at texture " .. i .. " is undefined")
                 else
-                    textureName = images[textureInfo.source]
+                    textureName = images[source]
                 end
             end
 
@@ -875,10 +926,12 @@ function M.extract_gltf_data(rawJson, loadSettings)
                 if baseTexture then
                     printWarning = printWarning or baseTexture.texCoord ~= 0
 
-                    textureName = textures[baseTexture.index]
+                    local baseTextureIndex = baseTexture.index + 1
+
+                    textureName = textures[baseTextureIndex]
 
                     if not textureName then
-                        error("texture with index " .. baseTexture.index .. " used in material with index " .. i .. " is undefined")
+                        error("texture with index " .. baseTextureIndex .. " used in material with index " .. i .. " is undefined")
                     end
                 end
             end
@@ -900,14 +953,16 @@ function M.extract_gltf_data(rawJson, loadSettings)
             local primitives = { }
 
             for _, primitiveInfo in ipairs(meshInfo.primitives) do
-                if not table.has(primitiveModes, primitiveInfo.mode) then
-                    error("invalid mesh primitive mode: " .. primitiveInfo.mode)
+                local mode = primitiveInfo.mode or PRIMITIVE_MODE_TRIANGLES
+
+                if not table.has(primitiveModes, mode) then
+                    error("invalid mesh primitive mode: " .. mode)
                 end
 
-                if not table.has(supportedPrimitiveModes, primitiveInfo.mode) then
+                if not table.has(supportedPrimitiveModes, mode) then
                     warning(
                             "mesh primitives with mode " ..
-                                    primitiveInfo.mode .. " is not supported by this loader. skipping it"
+                                    mode .. " is not supported by this loader. skipping it"
                     )
                 else
                     local attributes = { }
@@ -970,6 +1025,10 @@ function M.extract_gltf_data(rawJson, loadSettings)
                         for i = 0, #gltfIndices - 1 do
                             local idx = gltfIndices[i + 1]
 
+                            if idx >= prevAttribAccessorCount then
+                                error("mesh primitive index " .. idx .. " is >= than attribute accessor count (" .. prevAttribAccessorCount .. ")")
+                            end
+
                             for j = 1, supportedAttrsCount do
                                 indices[i * supportedAttrsCount + j] = idx
                             end
@@ -987,10 +1046,12 @@ function M.extract_gltf_data(rawJson, loadSettings)
                     local material
 
                     if primitiveInfo.material then
-                        material = materials[primitiveInfo.material]
+                        local materialIndex = primitiveInfo.material + 1
+
+                        material = materials[materialIndex]
 
                         if not material then
-                            error("material with index " .. primitiveInfo.material .. " used in some mesh primitive is undefined")
+                            error("material with index " .. materialIndex .. " used in some mesh primitive is undefined")
                         end
                     else
                         material = defaultMaterial
@@ -1108,7 +1169,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
                         )
                     end
 
-                    local interpolationType = sampler.interpolation
+                    local interpolationType = sampler.interpolation or animationInterpolationTypeLinear
 
                     if not table.has(animationInterpolationTypes, interpolationType) then
                         error("unknown interpolation type " .. interpolationType)
@@ -1133,24 +1194,15 @@ function M.extract_gltf_data(rawJson, loadSettings)
                                 outTangent = values[(i - 1) * 3 + 3]
 
                                 if path == targetRotationPath then
-                                    inTangent = {
-                                        inTangent[4],
-                                        inTangent[1],
-                                        inTangent[2],
-                                        inTangent[3]
-                                    }
-
-                                    value = quat_math.normalize(quat_math.from_xyzw(value))
-
-                                    outTangent = {
-                                        outTangent[4],
-                                        outTangent[1],
-                                        outTangent[2],
-                                        outTangent[3]
-                                    }
+                                    inTangent = vec4XyzwToWxyz(inTangent)
+                                    outTangent = vec4XyzwToWxyz(outTangent)
                                 end
                             else
                                 value = values[i]
+                            end
+
+                            if path == targetRotationPath then
+                                value = quat_math.normalize(quat_math.from_xyzw(value))
                             end
 
                             keyframes[i] = {
@@ -1190,23 +1242,25 @@ function M.extract_gltf_data(rawJson, loadSettings)
 
             local meshIndex = nodeCopy.mesh
 
-            if mat4.determinant(getNodeGlobalMatrix(nodeCopy)) > 0 then
-                if not windingDefaultMeshesMap[meshIndex] then
-                    table.insert(finalMeshes, meshes[meshIndex])
-                    windingDefaultMeshesMap[meshIndex] = #finalMeshes
+            if meshIndex then
+                if mat4.determinant(getNodeGlobalMatrix(nodeCopy)) >= 0 then
+                    if not windingDefaultMeshesMap[meshIndex] then
+                        table.insert(finalMeshes, meshes[meshIndex])
+                        windingDefaultMeshesMap[meshIndex] = #finalMeshes
+                    end
+
+                    meshIndex = windingDefaultMeshesMap[meshIndex]
+                else
+                    if not windingInvertedMeshesMap[meshIndex] then
+                        table.insert(finalMeshes, getMeshCopyWithInvertedWinding(meshes[meshIndex]))
+                        windingInvertedMeshesMap[meshIndex] = #finalMeshes
+                    end
+
+                    meshIndex = windingInvertedMeshesMap[meshIndex]
                 end
 
-                meshIndex = windingDefaultMeshesMap[meshIndex]
-            else
-                if not windingInvertedMeshesMap[meshIndex] then
-                    table.insert(finalMeshes, getMeshCopyWithInvertedWinding(meshes[meshIndex]))
-                    windingInvertedMeshesMap[meshIndex] = #finalMeshes
-                end
-
-                meshIndex = windingInvertedMeshesMap[meshIndex]
+                nodeCopy.mesh = meshIndex
             end
-
-            nodeCopy.mesh = meshIndex
 
             if nodeCopy.children then
                 local newChildren = { }
