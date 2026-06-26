@@ -36,19 +36,19 @@ local function loadClipsMetadata(filePath, loadSettings)
 end
 
 function M.load_model(entity, filePath, loadSettings)
-    local status, clipsMetadataOrError, skeletonName = pcall(loader.load_from_path, filePath, loadSettings)
+    local status, clipsMetadataOrError, loaderTemp = pcall(loader.load_from_path, filePath, loadSettings)
+
+    if status and loaderTemp then
+        status = pcall(loader.model_setup(filePath, entity, loaderTemp))
+    end
 
     if not status then
         error("failed to load model file '" .. filePath .. "': " .. clipsMetadataOrError)
     end
 
-    if not skeletonName then
+    if not loaderTemp then
         error("failed to load model from file '" .. filePath .. "'. maybe this format is not supporting models?")
     end
-
-    entity:set_skeleton(skeletonName)
-
-    return skeletonName
 end
 
 function M.load_animator(skeleton, filePath)

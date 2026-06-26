@@ -1478,6 +1478,26 @@ local function loadSkeleton(nodes, skeletonName)
     assets.parse_model("vcm", content, "", skeletonName)
 end
 
+function M.setup_model(entity, loaderTemp)
+    local skeletonName = loaderTemp.skeletonName
+    local meshIndexToModelName = loaderTemp.meshIndexToModelName
+    local nodes = loaderTemp.nodes
+
+    entity:set_skeleton(skeletonName)
+
+    local rig = entity.skeleton
+
+    for _, node in ipairs(nodes) do
+        local ind = rig:index(node.uniqueName)
+
+        if node.mesh then
+            rig:set_model(ind, meshIndexToModelName[node.mesh])
+        end
+
+        rig:set_matrix(ind, node.matrix)
+    end
+end
+
 function M.load(value, loadSettings)
     local data = M.extract_gltf_data(value, loadSettings)
     local nodes = data.nodes
@@ -1497,23 +1517,9 @@ function M.load(value, loadSettings)
 
     loadSkeleton(data.nodes, skeletonName)
 
-    local entity = loadSettings.entity
-
-    entity:set_skeleton(skeletonName)
-
-    local rig = entity.skeleton
-
     local metadataSkeleton = { }
 
     for _, node in ipairs(nodes) do
-        local ind = rig:index(node.uniqueName)
-
-        if node.mesh then
-            rig:set_model(ind, meshIndexToModelName[node.mesh])
-        end
-
-        rig:set_matrix(ind, node.matrix)
-
         metadataSkeleton[node.uniqueName] = {
             position = node.translation,
             rotation = node.rotation,
@@ -1661,7 +1667,11 @@ function M.load(value, loadSettings)
         clips = clips
     }
 
-    return clipsMetadata, skeletonName
+    return clipsMetadata, {
+        nodes = nodes,
+        meshIndexToModelName = meshIndexToModelName,
+        skeletonName = skeletonName
+    }
 end
 
 return M

@@ -60,7 +60,7 @@ function M.load_from_path(filePath, loadSettings, noCache)
     local loader = loaders[ext]
 
     if not loader then
-        error("unsupported animations format: " .. ext)
+        error("unsupported file format: " .. ext)
     end
 
     loadSettings = loadSettings or { }
@@ -81,6 +81,18 @@ function M.load_from_path(filePath, loadSettings, noCache)
     end
 
     return unpack(result)
+end
+
+function M.setup_model(filePath, entity, loaderTemp)
+    local ext = file.ext(filePath)
+
+    local loader = loaders[ext]
+
+    if not loader then
+        error("unsupported file format: " .. ext)
+    end
+
+    loader.setup_model(entity, loaderTemp)
 end
 
 function M.remove_from_cache(filePath, loadSettings)
