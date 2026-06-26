@@ -19,11 +19,11 @@ local util = require "util/util"
 local loaders = {
     ["lfa"] = {
         binary = false,
-        func = require("lfa/lfa_loader").load
+        funcs = require("lfa/loader")
     },
     ["gltf"] = {
         binary = false,
-        func = require("gltf/gltf_loader").load
+        funcs = require("gltf/gltf_loader")
     }
 }
 
@@ -67,7 +67,7 @@ function M.load_from_path(filePath, loadSettings, noCache)
 
     loadSettings.sourceFile = filePath
 
-    local result = { loader.func(loader.binary and file.read_bytes(filePath) or file.read(filePath), loadSettings) }
+    local result = { loader.funcs.load(loader.binary and file.read_bytes(filePath) or file.read(filePath), loadSettings) }
 
     if not noCache then
         local fileCaches = cache[filePath]
@@ -92,7 +92,7 @@ function M.setup_model(filePath, entity, loaderTemp)
         error("unsupported file format: " .. ext)
     end
 
-    loader.setup_model(entity, loaderTemp)
+    loader.funcs.setup_model(entity, loaderTemp)
 end
 
 function M.remove_from_cache(filePath, loadSettings)
@@ -112,7 +112,7 @@ function M.remove_from_cache(filePath, loadSettings)
 end
 
 function M.get_load_function_by_extension(ext)
-    return loaders[ext].func
+    return loaders[ext].funcs.load
 end
 
 function M.is_binary_format(ext)

@@ -159,8 +159,8 @@ local supportedMeshPrimitiveAttributes = {
 local meshPrimitiveAttributeValueTypes = {
     [attrPosition] = { VEC3 },
     [attrNormal] = { VEC3 },
-    [attrTexCoord0] = { VEC2 },
-    [attrColor0] = { VEC3, VEC4 }
+    [attrTexCoord] = { VEC2 },
+    [attrColor] = { VEC3, VEC4 }
 }
 
 local indexComponentTypes = {
@@ -461,7 +461,7 @@ local function unescapeUri(uri)
     end)
 end
 
-local function loadBytearrayFromURI(srcUri, sourceFile)
+local function loadBytearrayFromURI(allowedMediaTypes, srcUri, sourceFile)
     local bytes
 
     local uri = unescapeUri(srcUri)
@@ -496,7 +496,7 @@ local function loadBytearrayFromURI(srcUri, sourceFile)
 
             local mediaType = uri:sub(schemeEnd + 1, firstSemicolon - 1)
 
-            if not table.has(bufferMediaTypes, mediaType) then
+            if not table.has(allowedMediaTypes, mediaType) then
                 error("invalid media type for buffer: " .. mediaType)
             end
 
@@ -699,7 +699,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
         local bytes
 
         if bufferInfo.uri then
-            bytes = loadBytearrayFromURI(bufferInfo.uri, loadSettings.sourceFile)
+            bytes = loadBytearrayFromURI(bufferMediaTypes, bufferInfo.uri, loadSettings.sourceFile)
         else
             bytes = loadSettings.binaryChunk
         end
@@ -725,7 +725,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
         local off = bufferViewInfo.byteOffset
         local requiredLength = off + bufferViewInfo.byteLength
 
-        if requiredLength < #srcBuffer then
+        if  #srcBuffer < requiredLength then
             error("length of pointed buffer is less than bufferView.byteLength (required " .. requiredLength .. " bytes, got " .. #srcBuffer .. ")")
         end
 
@@ -765,7 +765,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
             elements = deserializeAccessorElements(
                     type, componentType,
                     bufferViewData.view, bufferViewData.stride,
-                    accessorInfo.byteOffset, accessorInfo.count,
+                    accessorInfo.byteOffset or 0, accessorInfo.count,
                     normalized
             )
         else
@@ -802,7 +802,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
             local indices = deserializeAccessorElements(
                     SCALAR, indicesInfo.componentType,
                     indicesBufferViewData.view, indicesBufferViewData.stride,
-                    indicesInfo.byteOffset, sparseCount,
+                    indicesInfo.byteOffset or 0, sparseCount,
                     false
             )
 
@@ -811,7 +811,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
             local values = deserializeAccessorElements(
                     type, componentType,
                     valuesBufferViewData.view, valuesBufferViewData.stride,
-                    valuesInfo.byteOffset, sparseCount,
+                    valuesInfo.byteOffset or 0, sparseCount,
                     normalized
             )
 
@@ -852,7 +852,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
                 bytes = getBufferView(imageInfo.bufferView).view
                 mimeType = imageInfo.mimeType
             elseif imageInfo.uri then
-                bytes = loadBytearrayFromURI(imageInfo.uri, loadSettings.sourceFile)
+                bytes = loadBytearrayFromURI(imageMediaTypes, imageInfo.uri, loadSettings.sourceFile)
 
                 if imageInfo.mimeType then
                     mimeType = imageInfo.mimeType
@@ -1385,7 +1385,7 @@ local function loadMeshAsModel(mesh, modelName)
 
         local attrsOffset = { }
 
-        for _, attribute in pairs(primitive.attributes) do
+        for _, attribute in ipairs(primitive.attributes) do
             local attrType = attribute.type
             local attrValues = attribute.values
 
@@ -1427,7 +1427,7 @@ local function loadMeshAsModel(mesh, modelName)
 
         for vertexIndex = 0, verticesCount - 1 do
             for attrIndex = 1, attrsCount do
-                local attrValueIndexInVertex = vertexIndex * attrsCount + attrIndex - 1 + attrsOffset[attrIndex]
+                local attrValueIndexInVertex = indices[vertexIndex * attrsCount + attrIndex] + attrsOffset[attrIndex] + 1
 
                 token = token .. attrValueIndexInVertex .. "/"
             end
@@ -1444,8 +1444,12 @@ local function loadMeshAsModel(mesh, modelName)
             end
         end
 
-        content = content .. "\n\n"
+        content = content .. "\n"
     end
+
+    content = content:sub(1, #content - 1)
+
+    file.write("export:" .. modelName .. ".txt", content)
 
     assets.parse_model("obj", content, modelName)
 end
@@ -1454,19 +1458,19 @@ local function loadSkeleton(nodes, skeletonName)
     local content = ""
 
     local function addNodeToVcm(node)
-        content = content .. "@bone name " .. node.uniqueName
+        content = content .. '@bone name "' .. node.uniqueName .. '"'
 
-        if node.children and #node.children > 0 then
-            content = content .. " {\n"
+        content = content .. " {\n"
 
+        content = content .. "@box from (0, 0, 0) to (1, 1, 1)\n"
+
+        if node.children then
             for _, childIndex in ipairs(node.children) do
                 addNodeToVcm(nodes[childIndex])
             end
-
-            content = content .. "}"
-        else
-            content = content .. "\n"
         end
+
+        content = content .. "}\n"
     end
 
     for _, node in ipairs(nodes) do
@@ -1475,7 +1479,7 @@ local function loadSkeleton(nodes, skeletonName)
         end
     end
 
-    assets.parse_model("vcm", content, "", skeletonName)
+    assets.parse_model("vcm", content, "trash_model", skeletonName)
 end
 
 function M.setup_model(entity, loaderTemp)
@@ -1567,7 +1571,7 @@ function M.load(value, loadSettings)
 
             table.insert_unique(bonesIndices, name)
 
-            local boneIndex = table.index(bonesIndices)
+            local boneIndex = table.index(bonesIndices, name)
 
             table.insert_unique(affectedBones, boneIndex)
 
@@ -1585,13 +1589,9 @@ function M.load(value, loadSettings)
                     lfInterpType = gltfInterpTypeToLiveframe[interpType]
                 end
 
+                table.insert_unique(interpTypesIndices, lfInterpType)
+
                 local interpIndex = table.index(interpTypesIndices, lfInterpType)
-
-                if not interpIndex then
-                    table.insert(interpTypesIndices, lfInterpType)
-
-                    interpIndex = #interpTypesIndices
-                end
 
                 local lfKeyframes = { }
 
@@ -1606,9 +1606,9 @@ function M.load(value, loadSettings)
                         maxTime = time
                     end
 
-                    lfKeyframes[animation_constants.KEY_VALUE_INDEX] = keyframe.value
-                    lfKeyframes[animation_constants.KEY_TIME_INDEX] = time
-                    lfKeyframes[animation_constants.KEY_INTERP_TYPE_INDEX] = lfInterpType
+                    lfKeyframe[animation_constants.KEY_VALUE_INDEX] = keyframe.value
+                    lfKeyframe[animation_constants.KEY_TIME_INDEX] = time
+                    lfKeyframe[animation_constants.KEY_INTERP_TYPE_INDEX] = interpIndex
 
                     local interpFields
 
@@ -1636,7 +1636,7 @@ function M.load(value, loadSettings)
                         end
                     end
 
-                    lfKeyframes[animation_constants.KEY_INTERP_FIELDS_INDEX] = interpFields
+                    lfKeyframe[animation_constants.KEY_INTERP_FIELDS_INDEX] = interpFields
 
                     lfKeyframes[i] = lfKeyframe
                 end
