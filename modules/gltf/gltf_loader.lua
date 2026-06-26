@@ -15,6 +15,7 @@
 ]]--
 
 local quat_math = require "util/math/quat_math"
+local animation_constants = require "general_constants"
 
 local warnings = true
 
@@ -152,8 +153,7 @@ local meshPrimitiveAttributes = {
 local supportedMeshPrimitiveAttributes = {
     attrPosition,
     attrNormal,
-    attrTexCoord0,
-    attrColor0
+    attrTexCoord0
 }
 
 local meshPrimitiveAttributeValueTypes = {
@@ -877,7 +877,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
 
                 images[i] = "notfound"
             else
-                local textureName = "lf_gltf_" .. uniqueModelIndex .. "_" .. i
+                local textureName = "lf_gltf_texture_" .. uniqueModelIndex .. "_" .. i
 
                 if mimeType == pngMediaType then
                     assets.load_texture(bytes, textureName, "png")
@@ -1108,6 +1108,8 @@ function M.extract_gltf_data(rawJson, loadSettings)
     end
 
     for _, node in ipairs(nodes) do
+        node.uniqueName = getUniqueNodeName(node)
+
         if node.mesh and not meshes[node.mesh] then
             error("node " .. node.name .. " using undefined mesh with index " .. node.mesh)
         end
@@ -1291,6 +1293,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
     nodes = {
         {
             name: string,
+            uniqueName: string,
             mesh: int,
             translation: vec3,
             rotation: quat,
@@ -1354,10 +1357,311 @@ function M.extract_gltf_data(rawJson, loadSettings)
     }
 end
 
+local gltfAttrToObjToken = {
+    [attrPosition] = "v",
+    [attrNormal] = "vn",
+    [attrTexCoord0] = "vt"
+}
+
+local gltfInterpTypeToLiveframe = {
+    [animationInterpolationTypeLinear] = "lerp",
+    [animationInterpolationTypeStep] = "step",
+    [animationInterpolationTypeCubicSpline] = "cubic-spline"
+}
+
+local gltfTargetPathToLiveframeChannelIndex = {
+    [targetTranslationPath] = animation_constants.POSITION_KEYS_INDEX,
+    [targetRotationPath] = animation_constants.ROTATION_KEYS_INDEX,
+    [targetScalePath] = animation_constants.SCALE_KEYS_INDEX
+}
+
+local function loadMeshAsModel(mesh, modelName)
+    local content = ""
+
+    local writtenAttrsCount = { }
+
+    for _, primitive in ipairs(mesh.primitives) do
+        content = content .. "usemtl " .. primitive.material.texture .. "\n"
+
+        local attrsOffset = { }
+
+        for _, attribute in pairs(primitive.attributes) do
+            local attrType = attribute.type
+            local attrValues = attribute.values
+
+            local attrOffsetInObj = writtenAttrsCount[attrType] or 0
+
+            local token = gltfAttrToObjToken[attrType] .. " "
+
+            local valuesCount = #attrValues
+
+            if valuesCount > 0 then
+                local compsCount = #attrValues[1]
+
+                -- for performance
+                if compsCount == 3 then
+                    for i = 1, valuesCount do
+                        local value = attrValues[i]
+
+                        content = content .. token .. value[1] .. " " .. value[2] .. " " .. value[3] .. "\n"
+                    end
+                elseif compsCount == 2 then
+                    for i = 1, valuesCount do
+                        local value = attrValues[i]
+
+                        content = content .. token .. value[1] .. " " .. value[2] .. "\n"
+                    end
+                else error() end
+            end
+
+            attrsOffset[#attrsOffset + 1] = attrOffsetInObj
+            writtenAttrsCount[attrType] = attrOffsetInObj + valuesCount
+        end
+
+        local indices = primitive.indices
+        local attrsCount = #primitive.attributes
+
+        local verticesCount = #indices / attrsCount
+
+        local token = "f "
+
+        for vertexIndex = 0, verticesCount - 1 do
+            for attrIndex = 1, attrsCount do
+                local attrValueIndexInVertex = vertexIndex * attrsCount + attrIndex - 1 + attrsOffset[attrIndex]
+
+                token = token .. attrValueIndexInVertex .. "/"
+            end
+
+            if attrsCount > 1 then
+                token = token:sub(1, #token - 1)
+            end
+
+            token = token .. " "
+
+            if (vertexIndex + 1) % 3 == 0 then
+                content = content .. token .. "\n"
+                token = "f "
+            end
+        end
+
+        content = content .. "\n\n"
+    end
+
+    assets.parse_model("obj", content, modelName)
+end
+
+local function loadSkeleton(nodes, skeletonName)
+    local content = ""
+
+    local function addNodeToVcm(node)
+        content = content .. "@bone name " .. node.uniqueName
+
+        if node.children and #node.children > 0 then
+            content = content .. " {\n"
+
+            for _, childIndex in ipairs(node.children) do
+                addNodeToVcm(nodes[childIndex])
+            end
+
+            content = content .. "}"
+        else
+            content = content .. "\n"
+        end
+    end
+
+    for _, node in ipairs(nodes) do
+        if not node.parent then
+            addNodeToVcm(node)
+        end
+    end
+
+    assets.parse_model("vcm", content, "", skeletonName)
+end
+
 function M.load(value, loadSettings)
     local data = M.extract_gltf_data(value, loadSettings)
+    local nodes = data.nodes
 
+    -- models
 
+    local meshIndexToModelName = { }
+    local skeletonName = "lf_gltf_skeleton_" .. uniqueModelIndex
+
+    for i, mesh in ipairs(data.meshes) do
+        local modelName = "lf_gltf_mesh_" .. uniqueModelIndex .. "_" .. i
+
+        loadMeshAsModel(mesh, modelName)
+
+        meshIndexToModelName[i] = modelName
+    end
+
+    loadSkeleton(data.nodes, skeletonName)
+
+    local entity = loadSettings.entity
+
+    entity:set_skeleton(skeletonName)
+
+    local rig = entity.skeleton
+
+    local metadataSkeleton = { }
+
+    for _, node in ipairs(nodes) do
+        local ind = rig:index(node.uniqueName)
+
+        if node.mesh then
+            rig:set_model(ind, meshIndexToModelName[node.mesh])
+        end
+
+        rig:set_matrix(ind, node.matrix)
+
+        metadataSkeleton[node.uniqueName] = {
+            position = node.translation,
+            rotation = node.rotation,
+            scale = node.scale
+        }
+    end
+
+    local relativizeTransforms = loadSettings.relativizeTransforms
+
+    local startTangentIndex, endTangentIndex = 1, 2
+
+    local interpTypesIndices = { }
+    local interpFieldsIndices = {
+        ["cubic-spline"] = {
+            [1] = {
+                ["start-tangent"] = startTangentIndex,
+                ["end-tangent"] = endTangentIndex
+            },
+            [2] = {
+                ["start-tangent"] = startTangentIndex,
+                ["end-tangent"] = endTangentIndex
+            }
+        }
+    }
+
+    local bonesIndices = { }
+
+    local clips = { }
+
+    for _, animationInfo in ipairs(data.animations) do
+        local clip = {
+            name = animationInfo.name,
+            loop = false,
+            events = { }
+        }
+
+        local maxTime = 0
+
+        local affectedBones = { }
+
+        local bonesKeys = { }
+
+        for animNodeIndex, channels in pairs(animationInfo.nodes) do
+            local name = nodes[animNodeIndex].uniqueName
+
+            table.insert_unique(bonesIndices, name)
+
+            local boneIndex = table.index(bonesIndices)
+
+            table.insert_unique(affectedBones, boneIndex)
+
+            local lfBoneKeyframes = { { }, { }, { } }
+
+            for channel, channelData in pairs(channels) do
+                local interpType = channelData.interpolation
+                local keyframes = channelData.keyframes
+
+                local lfInterpType
+
+                if channel == targetRotationPath and interpType == animationInterpolationTypeLinear then
+                    lfInterpType = "slerp"
+                else
+                    lfInterpType = gltfInterpTypeToLiveframe[interpType]
+                end
+
+                local interpIndex = table.index(interpTypesIndices, lfInterpType)
+
+                if not interpIndex then
+                    table.insert(interpTypesIndices, lfInterpType)
+
+                    interpIndex = #interpTypesIndices
+                end
+
+                local lfKeyframes = { }
+
+                for i, keyframe in ipairs(keyframes) do
+                    local nextKeyframe = keyframes[i + 1]
+
+                    local lfKeyframe = { }
+
+                    local time = keyframe.time
+
+                    if maxTime < time then
+                        maxTime = time
+                    end
+
+                    lfKeyframes[animation_constants.KEY_VALUE_INDEX] = keyframe.value
+                    lfKeyframes[animation_constants.KEY_TIME_INDEX] = time
+                    lfKeyframes[animation_constants.KEY_INTERP_TYPE_INDEX] = lfInterpType
+
+                    local interpFields
+
+                    if interpType == animationInterpolationTypeCubicSpline then
+                        if nextKeyframe then
+                            interpFields = { }
+
+                            local useVec4 = channel == targetRotationPath
+
+                            local segmentDuration = nextKeyframe.time - time
+
+                            local startTangent = keyframe.outTangent
+                            local endTangent = nextKeyframe.inTangent
+
+                            if useVec4 then
+                                startTangent, endTangent = vec4.mul(startTangent, segmentDuration),
+                                                           vec4.mul(endTangent, segmentDuration)
+                            else
+                                startTangent, endTangent = vec3.mul(startTangent, segmentDuration),
+                                                           vec3.mul(endTangent, segmentDuration)
+                            end
+
+                            interpFields[startTangentIndex] = startTangent
+                            interpFields[endTangentIndex] = endTangent
+                        end
+                    end
+
+                    lfKeyframes[animation_constants.KEY_INTERP_FIELDS_INDEX] = interpFields
+
+                    lfKeyframes[i] = lfKeyframe
+                end
+
+                lfBoneKeyframes[gltfTargetPathToLiveframeChannelIndex[channel]] = lfKeyframes
+            end
+
+            bonesKeys[boneIndex] = lfBoneKeyframes
+        end
+
+        clip.duration = maxTime
+        clip.affectedBones = affectedBones
+        clip.bonesKeys = bonesKeys
+
+        table.insert(clips, clip)
+    end
+
+    local clipsMetadata = {
+        metadata = {
+            relativizeTransforms = relativizeTransforms,
+            skeleton = metadataSkeleton
+        },
+
+        interpTypesIndices = interpTypesIndices,
+        interpFieldsIndices = interpFieldsIndices,
+        bonesIndices = bonesIndices,
+
+        clips = clips
+    }
+
+    return clipsMetadata, skeletonName
 end
 
 return M

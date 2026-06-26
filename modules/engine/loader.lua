@@ -19,7 +19,11 @@ local util = require "util/util"
 local loaders = {
     ["lfa"] = {
         binary = false,
-        func = require("lfa/loader").load
+        func = require("lfa/lfa_loader").load
+    },
+    ["gltf"] = {
+        binary = false,
+        func = require("gltf/gltf_loader").load
     }
 }
 
@@ -32,6 +36,15 @@ local cache = { }
 local M = { }
 
 function M.load_from_path(filePath, loadSettings, noCache)
+    if loadSettings then
+        for name, alias in pairs(loadSettingsAliases) do
+            if loadSettings[alias] ~= nil then
+                loadSettings[name] = loadSettings[alias]
+                loadSettings[alias] = nil
+            end
+        end
+    end
+
     local loadSettingsHash
 
     if not noCache then
@@ -50,16 +63,11 @@ function M.load_from_path(filePath, loadSettings, noCache)
         error("unsupported animations format: " .. ext)
     end
 
-    if loadSettings then
-        for name, alias in pairs(loadSettingsAliases) do
-            if loadSettings[alias] ~= nil then
-                loadSettings[name] = loadSettings[alias]
-                loadSettings[alias] = nil
-            end
-        end
-    end
+    loadSettings = loadSettings or { }
 
-    local result = { loader.func(loader.binary and file.read_bytes(filePath) or file.read(filePath), loadSettings or { }) }
+    loadSettings.sourceFile = filePath
+
+    local result = { loader.func(loader.binary and file.read_bytes(filePath) or file.read(filePath), loadSettings) }
 
     if not noCache then
         local fileCaches = cache[filePath]
