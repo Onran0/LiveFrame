@@ -24,6 +24,11 @@ local loaders = {
     ["gltf"] = {
         binary = false,
         funcs = require("gltf/gltf_loader")
+    },
+    ["glb"] = {
+        binary = true,
+        requiresStream = true,
+        funcs = require("gltf/glb_loader")
     }
 }
 
@@ -67,7 +72,29 @@ function M.load_from_path(filePath, loadSettings, noCache)
 
     loadSettings.sourceFile = filePath
 
-    local result = { loader.funcs.load(loader.binary and file.read_bytes(filePath) or file.read(filePath), loadSettings) }
+    local rawIsStream
+    local raw
+
+    if loader.binary then
+        if loader.requiresStream then
+            raw = file.open(filePath, "r")
+            rawIsStream = true
+        else
+            raw = file.read_bytes(filePath)
+        end
+    else
+        raw = file.read(filePath)
+    end
+
+    local status, result = pcall(function() return { loader.funcs.load(raw, loadSettings) } end)
+
+    if rawIsStream then
+        raw:close()
+    end
+
+    if not status then
+        error(result)
+    end
 
     if not noCache then
         local fileCaches = cache[filePath]

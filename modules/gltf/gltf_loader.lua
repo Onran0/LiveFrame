@@ -724,6 +724,10 @@ function M.extract_gltf_data(rawJson, loadSettings)
             bytes = loadBytearrayFromURI(bufferMediaTypes, bufferInfo.uri, loadSettings.sourceFile)
         else
             bytes = loadSettings.binaryChunk
+
+            if not bytes then
+                error("buffer with undefined uri and in context without binary chunk")
+            end
         end
 
         if #bytes < bufferInfo.byteLength then
