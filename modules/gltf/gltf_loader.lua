@@ -400,6 +400,8 @@ local supportedAnimationInterpolationTypes = {
     animationInterpolationTypeCubicSpline
 }
 
+local supportedExtensions = { }
+
 local function splitVersionToMajorMinor(strVersion)
     if strVersion:find(".", 1, true) then
         local split = strVersion:split(".")
@@ -545,6 +547,26 @@ function M.extract_gltf_data(rawJson, loadSettings)
 
         if majorSupportedVersion ~= majorVersion then
             error("glTF files with version " .. majorVersion .. ".x is not supported by this loader")
+        end
+    end
+
+    if gltfTable.extensionsUsed then
+        for _, ext in ipairs(gltfTable.extensionsUsed) do
+            if not table.has(supportedExtensions, ext) then
+                warning("extension '" .. ext .. "' is not supported. loader will skip all provided extension data")
+            end
+        end
+    end
+
+    if gltfTable.extensionsRequired then
+        for _, ext in ipairs(gltfTable.extensionsRequired) do
+            if not gltfTable.extensionsUsed or not table.has(gltfTable.extensionsUsed, ext) then
+                error("extension '" .. ext .. "' specified in extensionsRequired but missing in extensionsUsed")
+            end
+
+            if not table.has(supportedExtensions, ext) then
+                error("required extension '" .. ext .. "' is not supported")
+            end
         end
     end
 
