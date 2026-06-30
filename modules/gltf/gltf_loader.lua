@@ -1414,12 +1414,12 @@ local gltfTargetPathToLiveframeChannelIndex = {
 local attrs = 0
 
 local function loadMeshAsModel(mesh, modelName)
-    local content = ""
+    local content = { }
 
     local writtenAttrsCount = { }
 
     for _, primitive in ipairs(mesh.primitives) do
-        content = content .. "usemtl " .. primitive.material.texture .. "\n"
+        content[#content + 1] = "usemtl " .. primitive.material.texture .. "\n"
 
         local attrsOffset = { }
 
@@ -1441,7 +1441,13 @@ local function loadMeshAsModel(mesh, modelName)
                     for i = 1, valuesCount do
                         local value = attrValues[i]
 
-                        content = content .. token .. value[1] .. " " .. value[2] .. " " .. value[3] .. "\n"
+                        if deb then
+                            if i % 100 == 0 then
+                                print(i)
+                            end
+                        end
+
+                        content[#content + 1] =  token .. value[1] .. " " .. value[2] .. " " .. value[3] .. "\n"
                     end
                 elseif compsCount == 2 then
                     for i = 1, valuesCount do
@@ -1451,7 +1457,7 @@ local function loadMeshAsModel(mesh, modelName)
                             value[2] = 1.0 - value[2]
                         end
 
-                        content = content .. token .. value[1] .. " " .. value[2] .. "\n"
+                        content[#content + 1] = token .. value[1] .. " " .. value[2] .. "\n"
                     end
                 else error() end
             end
@@ -1467,33 +1473,33 @@ local function loadMeshAsModel(mesh, modelName)
 
         local verticesCount = #indices / attrsCount
 
-        local token = "f "
-
         for vertexIndex = 0, verticesCount - 1 do
+            if vertexIndex % 3 == 0 then
+                content[#content + 1] = "f "
+            end
+
             for attrIndex = 1, attrsCount do
                 local attrValueIndexInVertex = indices[vertexIndex * attrsCount + attrIndex] + attrsOffset[attrIndex] + 1
+                content[#content + 1] = attrValueIndexInVertex
 
-                token = token .. attrValueIndexInVertex .. "/"
+                if attrIndex < attrsCount then
+                    content[#content + 1] = "/"
+                end
             end
-
-            if attrsCount > 1 then
-                token = token:sub(1, #token - 1)
-            end
-
-            token = token .. " "
 
             if (vertexIndex + 1) % 3 == 0 then
-                content = content .. token .. "\n"
-                token = "f "
+                content[#content + 1] = "\n"
+            else
+                content[#content + 1] = " "
             end
         end
 
-        content = content .. "\n"
+        content[#content + 1] = "\n"
     end
 
-    content = content:sub(1, #content - 1)
+    content[#content] = nil -- \n remove
 
-    assets.parse_model("obj", content, modelName)
+    assets.parse_model("obj", table.concat(content), modelName)
 end
 
 local function loadSkeleton(nodes, skeletonName)
