@@ -60,16 +60,10 @@ function M.load(stream, loadSettings)
     local jsonChunk
     local binChunk
 
-    while true do
-        local chunkLength = stream:read(UINT32_SIZE)
+    local handledBytes = 0
 
-        if #chunkLength ~= 0 and #chunkLength < UINT32_SIZE then
-            error("invalid glB chunk")
-        end
-
-        chunkLength = byteutil.unpack("<I", chunkLength)
-
-        local chunkType = stream:read("<I")
+    while handledBytes < length do
+        local chunkLength, chunkType = stream:read("<II")
         local chunkData = stream:read(chunkLength)
 
         if table.has(supportedChunkTypes, chunkType) then
@@ -93,6 +87,8 @@ function M.load(stream, loadSettings)
         else
             warning("skipping unsupported glB chunk of type 0x" .. string.format("%X", chunkType))
         end
+
+        handledBytes = handledBytes + UINT32_SIZE * 2 + chunkLength
     end
 
     if not jsonChunk then
