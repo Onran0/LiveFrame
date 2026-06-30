@@ -1441,13 +1441,13 @@ local function loadMeshAsModel(mesh, modelName)
                     for i = 1, valuesCount do
                         local value = attrValues[i]
 
-                        if deb then
-                            if i % 100 == 0 then
-                                print(i)
-                            end
-                        end
-
-                        content[#content + 1] =  token .. value[1] .. " " .. value[2] .. " " .. value[3] .. "\n"
+                        content[#content + 1] = token
+                        content[#content + 1] = value[1]
+                        content[#content + 1] = " "
+                        content[#content + 1] = value[2]
+                        content[#content + 1] = " "
+                        content[#content + 1] = value[3]
+                        content[#content + 1] = "\n"
                     end
                 elseif compsCount == 2 then
                     for i = 1, valuesCount do
@@ -1457,7 +1457,11 @@ local function loadMeshAsModel(mesh, modelName)
                             value[2] = 1.0 - value[2]
                         end
 
-                        content[#content + 1] = token .. value[1] .. " " .. value[2] .. "\n"
+                        content[#content + 1] = token
+                        content[#content + 1] = value[1]
+                        content[#content + 1] = " "
+                        content[#content + 1] = value[2]
+                        content[#content + 1] = "\n"
                     end
                 else error() end
             end
