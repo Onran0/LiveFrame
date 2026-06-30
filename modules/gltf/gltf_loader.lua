@@ -200,24 +200,24 @@ local function getMimeType(bytes)
     end
 end
 
-local function deserializeAccessorElement(type, componentType, bytes, normalized)
-    local componentsCount = elementTypeComponentsCount[type]
+local function deserializeAccessorElement(elementType, componentType, bytes, normalized)
+    local componentsCount = elementTypeComponentsCount[elementType]
     local componentFormat = componentTypeFormats[componentType]
 
     local format = "<"
     local components
 
-    if not table.has(matrixTypes, type) then
+    if not table.has(matrixTypes, elementType) then
         format = format .. componentFormat:rep(componentsCount)
         components = { byteutil.unpack(format, bytes) }
     else
         local componentSize = componentSizesInBytes[componentType]
 
-        local columnPaddingBytes = (componentSize * matrixRowsCount[type]) % 4
+        local columnPaddingBytes = (componentSize * matrixRowsCount[elementType]) % 4
 
-        format = format .. (componentFormat:rep(componentsCount)
+        format = format .. (componentFormat:rep(matrixRowsCount[elementType])
                 .. ("?") -- '?' is boolean format
-                :rep(columnPaddingBytes)):rep(matrixColumnsCount[type])
+                :rep(columnPaddingBytes)):rep(matrixColumnsCount[elementType])
 
         -- padding bytes will be read as booleans
 
