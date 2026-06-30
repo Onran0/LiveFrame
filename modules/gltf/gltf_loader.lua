@@ -438,7 +438,8 @@ end
 
 local nodeNameCharsToEscape = {
     "\\",
-    "/"
+    "/",
+    "#"
 }
 
 local function escapeNodeName(name)
@@ -577,6 +578,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
     if gltfTable.nodes then
         for i, node in ipairs(gltfTable.nodes) do
             local destNodeTable = {
+                index = i,
                 name = node.name,
                 translation = node.translation or { 0, 0, 0 },
                 rotation = node.rotation and quat_math.normalize(quat_math.from_xyzw(node.rotation)) or { 1, 0, 0, 0 },
@@ -639,11 +641,19 @@ function M.extract_gltf_data(rawJson, loadSettings)
     end
 
     local function getUniqueNodeName(node)
+        local nodeName
+
+        if node.name then
+            nodeName = escapeNodeName(node.name)
+        else
+            nodeName = "#" .. node.index
+        end
+
         if node.parent then
             local parentNameChain = getUniqueNodeName(nodes[node.parent])
 
-            return parentNameChain .. "/" .. escapeNodeName(node.name)
-        else return escapeNodeName(node.name) end
+            return parentNameChain .. "/" .. nodeName
+        else return nodeName end
     end
 
     local function getUpperNodeParentIndex(nodeIndex)
@@ -748,7 +758,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
             error("buffer with index " .. (bufIndex - 1) .. " is not exists")
         end
 
-        local off = bufferViewInfo.byteOffset
+        local off = bufferViewInfo.byteOffset or 0
         local requiredLength = off + bufferViewInfo.byteLength
 
         if  #srcBuffer < requiredLength then
@@ -1401,6 +1411,8 @@ local gltfTargetPathToLiveframeChannelIndex = {
     [targetScalePath] = animation_constants.SCALE_KEYS_INDEX
 }
 
+local attrs = 0
+
 local function loadMeshAsModel(mesh, modelName)
     local content = ""
 
@@ -1435,6 +1447,10 @@ local function loadMeshAsModel(mesh, modelName)
                     for i = 1, valuesCount do
                         local value = attrValues[i]
 
+                        if attrType == attrTexCoord0 then
+                            value[2] = 1.0 - value[2]
+                        end
+
                         content = content .. token .. value[1] .. " " .. value[2] .. "\n"
                     end
                 else error() end
@@ -1442,6 +1458,8 @@ local function loadMeshAsModel(mesh, modelName)
 
             attrsOffset[#attrsOffset + 1] = attrOffsetInObj
             writtenAttrsCount[attrType] = attrOffsetInObj + valuesCount
+
+            attrs = attrs + 1
         end
 
         local indices = primitive.indices
@@ -1475,33 +1493,29 @@ local function loadMeshAsModel(mesh, modelName)
 
     content = content:sub(1, #content - 1)
 
-    file.write("export:" .. modelName .. ".txt", content)
-
     assets.parse_model("obj", content, modelName)
 end
 
 local function loadSkeleton(nodes, skeletonName)
     local content = ""
 
-    local function addNodeToVcm(node)
-        content = content .. '@bone name "' .. node.uniqueName .. '"'
+    local function addNodeToVcm(node, indent)
+        content = content .. indent .. '@bone name "' .. node.uniqueName .. '" move (' .. table.concat(node.translation, ', ') .. ')'
 
         content = content .. " {\n"
 
-        content = content .. "@box from (0, 0, 0) to (1, 1, 1)\n"
-
         if node.children then
             for _, childIndex in ipairs(node.children) do
-                addNodeToVcm(nodes[childIndex])
+                addNodeToVcm(nodes[childIndex], indent .. "\t")
             end
         end
 
-        content = content .. "}\n"
+        content = content .. indent .. "}\n"
     end
 
     for _, node in ipairs(nodes) do
         if not node.parent then
-            addNodeToVcm(node)
+            addNodeToVcm(node, "")
         end
     end
 
@@ -1524,14 +1538,16 @@ function M.setup_model(entity, loaderTemp)
             rig:set_model(ind, meshIndexToModelName[node.mesh])
         end
 
-        rig:set_matrix(ind, node.matrix)
+        rig:set_matrix(ind, mat4.mul(
+                mat4.from_quat(node.rotation),
+                mat4.scale(node.scale)
+        ))
     end
 end
 
 function M.load(value, loadSettings)
     local data = M.extract_gltf_data(value, loadSettings)
     local nodes = data.nodes
-
     -- models
 
     local meshIndexToModelName = { }
