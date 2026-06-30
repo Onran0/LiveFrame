@@ -1411,15 +1411,16 @@ local gltfTargetPathToLiveframeChannelIndex = {
     [targetScalePath] = animation_constants.SCALE_KEYS_INDEX
 }
 
-local attrs = 0
-
 local function loadMeshAsModel(mesh, modelName)
     local content = { }
+    local pos = 0
 
     local writtenAttrsCount = { }
 
     for _, primitive in ipairs(mesh.primitives) do
-        content[#content + 1] = "usemtl " .. primitive.material.texture .. "\n"
+        content[pos + 1] = "usemtl " .. primitive.material.texture .. "\n"
+
+        pos = pos + 1
 
         local attrsOffset = { }
 
@@ -1441,13 +1442,15 @@ local function loadMeshAsModel(mesh, modelName)
                     for i = 1, valuesCount do
                         local value = attrValues[i]
 
-                        content[#content + 1] = token
-                        content[#content + 1] = value[1]
-                        content[#content + 1] = " "
-                        content[#content + 1] = value[2]
-                        content[#content + 1] = " "
-                        content[#content + 1] = value[3]
-                        content[#content + 1] = "\n"
+                        content[pos + 1] = token
+                        content[pos + 2] = value[1]
+                        content[pos + 3] = " "
+                        content[pos + 4] = value[2]
+                        content[pos + 5] = " "
+                        content[pos + 6] = value[3]
+                        content[pos + 7] = "\n"
+
+                        pos = pos + 7
                     end
                 elseif compsCount == 2 then
                     for i = 1, valuesCount do
@@ -1457,19 +1460,19 @@ local function loadMeshAsModel(mesh, modelName)
                             value[2] = 1.0 - value[2]
                         end
 
-                        content[#content + 1] = token
-                        content[#content + 1] = value[1]
-                        content[#content + 1] = " "
-                        content[#content + 1] = value[2]
-                        content[#content + 1] = "\n"
+                        content[pos + 1] = token
+                        content[pos + 2] = value[1]
+                        content[pos + 3] = " "
+                        content[pos + 4] = value[2]
+                        content[pos + 5] = "\n"
+
+                        pos = pos + 5
                     end
                 else error() end
             end
 
             attrsOffset[#attrsOffset + 1] = attrOffsetInObj
             writtenAttrsCount[attrType] = attrOffsetInObj + valuesCount
-
-            attrs = attrs + 1
         end
 
         local indices = primitive.indices
@@ -1479,29 +1482,39 @@ local function loadMeshAsModel(mesh, modelName)
 
         for vertexIndex = 0, verticesCount - 1 do
             if vertexIndex % 3 == 0 then
-                content[#content + 1] = "f "
+                content[pos + 1] = "f "
+
+                pos = pos + 1
             end
 
             for attrIndex = 1, attrsCount do
                 local attrValueIndexInVertex = indices[vertexIndex * attrsCount + attrIndex] + attrsOffset[attrIndex] + 1
-                content[#content + 1] = attrValueIndexInVertex
+
+                content[pos + 1] = attrValueIndexInVertex
+
+                pos = pos + 1
 
                 if attrIndex < attrsCount then
-                    content[#content + 1] = "/"
+                    content[pos + 1] = "/"
+                    pos = pos + 1
                 end
             end
 
             if (vertexIndex + 1) % 3 == 0 then
-                content[#content + 1] = "\n"
+                content[pos + 1] = "\n"
             else
-                content[#content + 1] = " "
+                content[pos + 1] = " "
             end
+
+            pos = pos + 1
         end
 
-        content[#content + 1] = "\n"
+        content[pos + 1] = "\n"
+
+        pos = pos + 1
     end
 
-    content[#content] = nil -- \n remove
+    content[pos] = nil -- \n remove
 
     assets.parse_model("obj", table.concat(content), modelName)
 end
