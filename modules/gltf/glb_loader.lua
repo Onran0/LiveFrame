@@ -14,6 +14,8 @@
    limitations under the License.
 ]]--
 
+local util = require "util/util"
+
 local gltf_loader = require "gltf/gltf_loader"
 
 local warnings = true
@@ -97,7 +99,7 @@ function M.load(stream, loadSettings)
 
     loadSettings.binaryChunk = binChunk
 
-    local status, res = pcall(function() return { gltf_loader.load(jsonChunk, loadSettings) } end)
+    local status, res = xpcall(function() return { gltf_loader.load(jsonChunk, loadSettings) } end, util.include_traceback)
 
     if not status then
         error("failed to load glTF JSON chunk from glB file: " .. res)

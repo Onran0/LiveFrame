@@ -86,7 +86,10 @@ function M.load_from_path(filePath, loadSettings, noCache)
         raw = file.read(filePath)
     end
 
-    local status, result = pcall(function() return { loader.funcs.load(raw, loadSettings) } end)
+    local status, result = xpcall(
+            function() return { loader.funcs.load(raw, loadSettings) } end,
+            util.include_traceback
+    )
 
     if rawIsStream then
         raw:close()

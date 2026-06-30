@@ -134,6 +134,8 @@ result format:
 }
 ]]--
 
+local util = require "util/util"
+
 local constants = require "engine/animator/constants"
 local conditions_loader = require "engine/animator/conditions_loader"
 
@@ -476,7 +478,7 @@ local function loadFromTable(animatorTable)
             error("clips file with id '" .. fileInfo[FIELD_ID] .. "' already defined")
         end
 
-        local status, val = pcall(loader.load_from_path, fileInfo[FIELD_FILE], fileInfo[FIELD_LOAD_SETTINGS])
+        local status, val = xpcall(loader.load_from_path, util.include_traceback, fileInfo[FIELD_FILE], fileInfo[FIELD_LOAD_SETTINGS])
 
         if not status then
             error("failed to load '" .. fileInfo[FIELD_FILE] .. "' animation clips file: " .. val)

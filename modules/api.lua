@@ -14,6 +14,8 @@
    limitations under the License.
 ]]--
 
+local util = require "util/util"
+
 local loader = require "engine/loader"
 local sampler = require "engine/clips/sampler"
 
@@ -26,7 +28,7 @@ local clips_meta_combiner = require "engine/clips/meta_combiner"
 local M = { }
 
 local function loadClipsMetadata(filePath, loadSettings)
-    local status, val = pcall(loader.load_from_path, filePath, loadSettings)
+    local status, val = xpcall(loader.load_from_path, util.include_traceback, filePath, loadSettings)
 
     if not status then
         error("failed to load animations file '" .. filePath .. "': " .. val)
@@ -36,7 +38,7 @@ local function loadClipsMetadata(filePath, loadSettings)
 end
 
 function M.load_model(entity, filePath, loadSettings)
-    local status, clipsMetadataOrError, loaderTemp = pcall(loader.load_from_path, filePath, loadSettings)
+    local status, clipsMetadataOrError, loaderTemp = xpcall(loader.load_from_path, util.include_traceback, filePath, loadSettings)
 
     if not status then
         error("failed to load model file '" .. filePath .. "': " .. clipsMetadataOrError)
@@ -47,7 +49,7 @@ function M.load_model(entity, filePath, loadSettings)
     end
 
     local err
-    status, err = pcall(loader.setup_model, filePath, entity, loaderTemp)
+    status, err = xpcall(loader.setup_model, util.include_traceback, filePath, entity, loaderTemp)
 
     if not status then
         error("failed to setup model on entity: " .. err)
@@ -55,7 +57,7 @@ function M.load_model(entity, filePath, loadSettings)
 end
 
 function M.load_animator(skeleton, filePath)
-    local status, res = pcall(animator_loader.load, file.read(filePath))
+    local status, res = xpcall(animator_loader.load, util.include_traceback,  file.read(filePath))
 
     if not status then
         error("failed to load animator '" .. filePath .. "': " .. res)

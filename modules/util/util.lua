@@ -25,4 +25,8 @@ function M.get_object_hash(obj)
     else return "crc32_" .. crc32(Bytearray(tostring(obj))) end
 end
 
+function M.include_traceback(err)
+    return debug.traceback(err, 2)
+end
+
 return M
