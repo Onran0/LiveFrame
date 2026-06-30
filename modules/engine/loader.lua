@@ -75,15 +75,15 @@ function M.load_from_path(filePath, loadSettings, noCache)
     local rawIsStream
     local raw
 
-    if loader.binary then
-        if loader.requiresStream then
-            raw = file.open(filePath, "r")
-            rawIsStream = true
-        else
+    if not loader.requiresStream then
+        if loader.binary then
             raw = file.read_bytes(filePath)
+        else
+            raw = file.read(filePath)
         end
     else
-        raw = file.read(filePath)
+        raw = file.open(filePath, "r" .. (loader.binary and "b" or ""))
+        rawIsStream = true
     end
 
     local status, result = xpcall(

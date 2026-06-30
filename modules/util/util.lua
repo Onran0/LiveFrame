@@ -26,7 +26,7 @@ function M.get_object_hash(obj)
 end
 
 function M.include_traceback(err)
-    return debug.traceback(err, 2)
+    return debug.traceback(err, 1)
 end
 
 return M

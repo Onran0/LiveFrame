@@ -63,8 +63,9 @@ function M.load(stream, loadSettings)
     local binChunk
 
     local handledBytes = 0
+    local payloadLength = length - UINT32_SIZE * 3
 
-    while handledBytes < length do
+    while handledBytes < payloadLength do
         local chunkLength, chunkType = stream:read("<II")
         local chunkData = stream:read(chunkLength)
 
@@ -86,6 +87,8 @@ function M.load(stream, loadSettings)
 
                 binChunk = chunkData
             end
+
+            chunkOccurrences[chunkType] = true
         else
             warning("skipping unsupported glB chunk of type 0x" .. string.format("%X", chunkType))
         end
