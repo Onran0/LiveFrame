@@ -15,7 +15,8 @@
 ]]--
 
 local quat_math = require "util/math/quat_math"
-local animation_constants = require "general_constants"
+local math_util = require "util/math/math_util"
+local constants = require "general_constants"
 
 local warnings = true
 
@@ -1234,6 +1235,8 @@ function M.extract_gltf_data(rawJson, loadSettings)
                         local times = timesAccessor.values
                         local values = valuesAccessor.values
 
+                        local prevQuat
+
                         for i = 1, #times do
                             local value, inTangent, outTangent
 
@@ -1252,6 +1255,20 @@ function M.extract_gltf_data(rawJson, loadSettings)
 
                             if path == targetRotationPath then
                                 value = quat_math.normalize(quat_math.from_xyzw(value))
+
+                                if prevQuat and quat_math.dot(prevQuat, value) <= 0 then
+                                    value = quat_math.negate(value)
+
+                                    if inTangent then
+                                        inTangent = vec4.mul(inTangent, -1)
+                                    end
+
+                                    if outTangent then
+                                        outTangent = vec4.mul(outTangent, -1)
+                                    end
+                                end
+
+                                prevQuat = value
                             end
 
                             keyframes[i] = {
@@ -1408,9 +1425,15 @@ local gltfInterpTypeToLiveframe = {
 }
 
 local gltfTargetPathToLiveframeChannelIndex = {
-    [targetTranslationPath] = animation_constants.POSITION_KEYS_INDEX,
-    [targetRotationPath] = animation_constants.ROTATION_KEYS_INDEX,
-    [targetScalePath] = animation_constants.SCALE_KEYS_INDEX
+    [targetTranslationPath] = constants.POSITION_KEYS_INDEX,
+    [targetRotationPath] = constants.ROTATION_KEYS_INDEX,
+    [targetScalePath] = constants.SCALE_KEYS_INDEX
+}
+
+local gltfTargetPathToLiveframeRelativizeKeyType = {
+    [targetTranslationPath] = constants.RELATIVIZE_KEYS_POSITION,
+    [targetRotationPath] = constants.RELATIVIZE_KEYS_ROTATION,
+    [targetScalePath] = constants.RELATIVIZE_KEYS_SCALE
 }
 
 local function toDecimalNotation(n)
@@ -1623,7 +1646,7 @@ function M.load(value, loadSettings)
         }
     end
 
-    local relativizeTransforms = loadSettings.relativizeTransforms
+    local relativizeKeys = loadSettings.relativizeKeys or { constants.RELATIVIZE_KEYS_POSITION }
 
     local startTangentIndex, endTangentIndex = 1, 2
 
@@ -1659,7 +1682,9 @@ function M.load(value, loadSettings)
         local bonesKeys = { }
 
         for animNodeIndex, channels in pairs(animationInfo.nodes) do
-            local name = nodes[animNodeIndex].uniqueName
+            local node = nodes[animNodeIndex]
+
+            local name = node.uniqueName
 
             table.insert_unique(bonesIndices, name)
 
@@ -1670,6 +1695,9 @@ function M.load(value, loadSettings)
             local lfBoneKeyframes = { { }, { }, { } }
 
             for channel, channelData in pairs(channels) do
+                local relativizeKeyType = gltfTargetPathToLiveframeRelativizeKeyType[channel]
+                local relativize = table.has(relativizeKeys, relativizeKeyType)
+
                 local interpType = channelData.interpolation
                 local keyframes = channelData.keyframes
 
@@ -1698,9 +1726,15 @@ function M.load(value, loadSettings)
                         maxTime = time
                     end
 
-                    lfKeyframe[animation_constants.KEY_VALUE_INDEX] = keyframe.value
-                    lfKeyframe[animation_constants.KEY_TIME_INDEX] = time
-                    lfKeyframe[animation_constants.KEY_INTERP_TYPE_INDEX] = interpIndex
+                    local keyValue = keyframe.value
+
+                    if relativize then
+                        keyValue = math_util.relativize_channel(relativizeKeyType, keyValue, node[channel])
+                    end
+
+                    lfKeyframe[constants.KEY_VALUE_INDEX] = keyValue
+                    lfKeyframe[constants.KEY_TIME_INDEX] = time
+                    lfKeyframe[constants.KEY_INTERP_TYPE_INDEX] = interpIndex
 
                     local interpFields
 
@@ -1715,6 +1749,26 @@ function M.load(value, loadSettings)
                             local startTangent = keyframe.outTangent
                             local endTangent = nextKeyframe.inTangent
 
+                            if relativize then
+                                local function relativizeTangent(tangent)
+                                    if channel == targetRotationPath then
+                                        tangent = quat_math.mul(
+                                                quat_math.conj(node.rotation),
+                                                quat_math.from_xyzw(tangent)
+                                        )
+                                    elseif channel == targetScalePath then
+                                        tangent = vec3.div(tangent, node.scale)
+                                    elseif channel == targetTranslationPath then
+                                        tangent = vec3.div(quat_math.rotate_vector(quat_math.conj(node.rotation), tangent), node.scale)
+                                    end
+
+                                    return tangent
+                                end
+
+                                startTangent = relativizeTangent(startTangent)
+                                endTangent = relativizeTangent(endTangent)
+                            end
+
                             if useVec4 then
                                 startTangent, endTangent = vec4.mul(startTangent, segmentDuration),
                                                            vec4.mul(endTangent, segmentDuration)
@@ -1728,7 +1782,7 @@ function M.load(value, loadSettings)
                         end
                     end
 
-                    lfKeyframe[animation_constants.KEY_INTERP_FIELDS_INDEX] = interpFields
+                    lfKeyframe[constants.KEY_INTERP_FIELDS_INDEX] = interpFields
 
                     lfKeyframes[i] = lfKeyframe
                 end
@@ -1748,7 +1802,7 @@ function M.load(value, loadSettings)
 
     local clipsMetadata = {
         metadata = {
-            relativizeTransforms = relativizeTransforms,
+            relativizedKeys = relativizeKeys,
             skeleton = metadataSkeleton
         },
 
@@ -1758,6 +1812,8 @@ function M.load(value, loadSettings)
 
         clips = clips
     }
+
+    file.write("export:temp", json.tostring(clipsMetadata))
 
     return clipsMetadata, {
         nodes = nodes,

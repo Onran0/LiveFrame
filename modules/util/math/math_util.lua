@@ -14,6 +14,7 @@
    limitations under the License.
 ]]--
 
+local quat_math = require "util/math/quat_math"
 local constants = require "general_constants"
 
 local M = { }
@@ -62,6 +63,32 @@ function M.compose_matrix_from_transform(transform)
     end
 
     return matrix
+end
+
+function M.relativize_position(position, base)
+    return vec3.sub(position, base)
+end
+
+function M.relativize_rotation(rotation, base) -- accepts normalized quaternions
+    if quat_math.dot(rotation, base) < 0 then
+        rotation = quat_math.negate(rotation)
+    end
+
+    return quat_math.mul(quat_math.conj(base), rotation)
+end
+
+function M.relativize_scale(scale, base)
+    return vec3.div(scale, base)
+end
+
+local relativizeFuncsTable = {
+    [constants.RELATIVIZE_KEYS_POSITION] = M.relativize_position,
+    [constants.RELATIVIZE_KEYS_ROTATION] = M.relativize_rotation,
+    [constants.RELATIVIZE_KEYS_SCALE] = M.relativize_scale
+}
+
+function M.relativize_channel(type, value, base)
+    return relativizeFuncsTable[type](value, base)
 end
 
 return M
