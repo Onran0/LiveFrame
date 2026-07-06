@@ -439,28 +439,6 @@ local function vec4XyzwToWxyz(vec)
     }
 end
 
-local nodeNameCharsToEscape = {
-    "\\",
-    "/",
-    "#"
-}
-
-local function escapeNodeName(name)
-    local escapedName = ""
-
-    for i = 1, utf8.length(name) do
-        local char = utf8.sub(name, i, i)
-
-        if table.has(nodeNameCharsToEscape, char) then
-            escapedName = escapedName .. "\\"
-        end
-
-        escapedName = escapedName .. char
-    end
-
-    return escapedName
-end
-
 local function unescapeUri(uri)
     return uri:gsub("%%(%x%x)", function(hex)
         return string.char(tonumber(hex, 16))
@@ -521,16 +499,6 @@ local function loadBytearrayFromURI(allowedMediaTypes, srcUri, sourceFile)
     end
 
     return bytes
-end
-
-function M.get_node_name_in_skeleton(nameChain)
-    local escapedNameChain = { }
-
-    for i = 1, #nameChain do
-        escapedNameChain[i] = escapeNodeName(nameChain[i])
-    end
-
-    return table.concat(escapedNameChain, "/")
 end
 
 function M.extract_gltf_data(rawJson, loadSettings)
@@ -643,20 +611,31 @@ function M.extract_gltf_data(rawJson, loadSettings)
         else return node.matrix end
     end
 
-    local function getUniqueNodeName(node)
-        local nodeName
+    local existingNodeNames = { }
 
-        if node.name then
-            nodeName = escapeNodeName(node.name)
+    local function getUniqueNodeName(name)
+        if not existingNodeNames[name] then
+            existingNodeNames[name] = true
+            return name
         else
-            nodeName = "#" .. node.index
+            local dot = name:match(".*()%.")
+
+            if dot then
+                local index = name:sub(dot + 1)
+
+                if index and #index > 0 and containsOnly(index, unsignedIntChars) then
+                    index = tostring(tonumber(index) + 1)
+
+                    if #index < 3 then
+                        index = ("0"):rep(3 - #index) .. index
+                    end
+
+                    return getUniqueNodeName(name:sub(1, dot) .. index)
+                end
+            end
+
+            return getUniqueNodeName(name .. ".001")
         end
-
-        if node.parent then
-            local parentNameChain = getUniqueNodeName(nodes[node.parent])
-
-            return parentNameChain .. "/" .. nodeName
-        else return nodeName end
     end
 
     local function getUpperNodeParentIndex(nodeIndex)
@@ -1147,7 +1126,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
     end
 
     for _, node in ipairs(nodes) do
-        node.uniqueName = getUniqueNodeName(node)
+        node.uniqueName = getUniqueNodeName(node.name)
 
         if node.mesh and not meshes[node.mesh] then
             error("node " .. node.name .. " using undefined mesh with index " .. node.mesh)
@@ -1591,6 +1570,8 @@ local function loadSkeleton(nodes, skeletonName)
             addNodeToVcm(node, "")
         end
     end
+
+    print(content)
 
     assets.parse_model("vcm", content, "trash_model", skeletonName)
 end
