@@ -41,6 +41,8 @@ local supportedImageMediaTypes = {
     pngMediaType
 }
 
+local defaultTextureName = "blocks:white"
+
 local SIGNED_BYTE = 5120
 local UNSIGNED_BYTE = 5121
 local SIGNED_SHORT = 5122
@@ -873,7 +875,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
     local materials = { }
 
     local defaultMaterial = {
-        texture = "white"
+        texture = defaultTextureName
     }
 
     if gltfTable.images then
@@ -958,7 +960,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
 
             local pbr = materialInfo.pbrMetallicRoughness
 
-            local textureName = "white"
+            local textureName = defaultTextureName
 
             if pbr then
                 printWarning = printWarning
