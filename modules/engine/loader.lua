@@ -19,7 +19,16 @@ local util = require "util/util"
 local loaders = {
     ["lfa"] = {
         binary = false,
-        func = require("lfa/loader").load
+        funcs = require("lfa/loader")
+    },
+    ["gltf"] = {
+        binary = false,
+        funcs = require("gltf/gltf_loader")
+    },
+    ["glb"] = {
+        binary = true,
+        requiresStream = true,
+        funcs = require("gltf/glb_loader")
     }
 }
 
@@ -32,6 +41,15 @@ local cache = { }
 local M = { }
 
 function M.load_from_path(filePath, loadSettings, noCache)
+    if loadSettings then
+        for name, alias in pairs(loadSettingsAliases) do
+            if loadSettings[alias] ~= nil then
+                loadSettings[name] = loadSettings[alias]
+                loadSettings[alias] = nil
+            end
+        end
+    end
+
     local loadSettingsHash
 
     if not noCache then
@@ -47,19 +65,39 @@ function M.load_from_path(filePath, loadSettings, noCache)
     local loader = loaders[ext]
 
     if not loader then
-        error("unsupported animations format: " .. ext)
+        error("unsupported file format: " .. ext)
     end
 
-    if loadSettings then
-        for name, alias in pairs(loadSettingsAliases) do
-            if loadSettings[alias] ~= nil then
-                loadSettings[name] = loadSettings[alias]
-                loadSettings[alias] = nil
-            end
+    loadSettings = loadSettings or { }
+
+    loadSettings.sourceFile = filePath
+
+    local rawIsStream
+    local raw
+
+    if not loader.requiresStream then
+        if loader.binary then
+            raw = file.read_bytes(filePath)
+        else
+            raw = file.read(filePath)
         end
+    else
+        raw = file.open(filePath, "r" .. (loader.binary and "b" or ""))
+        rawIsStream = true
     end
 
-    local result = { loader.func(loader.binary and file.read_bytes(filePath) or file.read(filePath), loadSettings or { }) }
+    local status, result = xpcall(
+            function() return { loader.funcs.load(raw, loadSettings) } end,
+            util.include_traceback
+    )
+
+    if rawIsStream then
+        raw:close()
+    end
+
+    if not status then
+        error(result)
+    end
 
     if not noCache then
         local fileCaches = cache[filePath]
@@ -92,7 +130,7 @@ function M.remove_from_cache(filePath, loadSettings)
 end
 
 function M.get_load_function_by_extension(ext)
-    return loaders[ext].func
+    return loaders[ext].funcs.load
 end
 
 function M.is_binary_format(ext)

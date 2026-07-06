@@ -109,7 +109,7 @@ local player = liveframe.create_player(
                 walk = "walk_2"
             },
             loadSettings = {
-                relativizeTransforms = true
+                relativizeKeys = true
             }
         }
 )
