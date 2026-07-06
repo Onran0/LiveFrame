@@ -1571,8 +1571,6 @@ local function loadSkeleton(nodes, skeletonName)
         end
     end
 
-    print(content)
-
     assets.parse_model("vcm", content, "trash_model", skeletonName)
 end
 

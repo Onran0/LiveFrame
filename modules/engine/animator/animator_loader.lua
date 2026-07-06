@@ -478,18 +478,20 @@ local function loadFromTable(animatorTable)
             error("clips file with id '" .. fileInfo[FIELD_ID] .. "' already defined")
         end
 
-        local status, val = xpcall(loader.load_from_path, util.include_traceback, fileInfo[FIELD_FILE], fileInfo[FIELD_LOAD_SETTINGS])
+        local status, res = xpcall(loader.load_from_path, util.include_traceback, fileInfo[FIELD_FILE], fileInfo[FIELD_LOAD_SETTINGS])
 
         if not status then
             error("failed to load '" .. fileInfo[FIELD_FILE] .. "' animation clips file: " .. val)
         end
 
-        for _, clip in ipairs(val.clips) do
+        local clipsMetadata = res.clipsMetadata
+
+        for _, clip in ipairs(clipsMetadata.clips) do
             affectedBonesByClips[fileInfo[FIELD_ID] .. "_" .. clip.name] = clip.affectedBones
         end
 
         table.insert(clipsMetadataIndices, fileInfo[FIELD_ID])
-        table.insert(clipsMetadataArray, val)
+        table.insert(clipsMetadataArray, clipsMetadata)
     end
 
     if animatorTable[FIELD_PARAMETERS] then

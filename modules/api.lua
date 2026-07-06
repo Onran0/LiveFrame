@@ -36,7 +36,7 @@ local function setupModel(entity, modelMetadata)
 
     local rig = entity.skeleton
 
-    for boneName, boneInfo in ipairs(bones) do
+    for boneName, boneInfo in pairs(bones) do
         local ind = rig:index(boneName)
 
         if boneInfo.mesh then
