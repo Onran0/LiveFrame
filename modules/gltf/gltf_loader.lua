@@ -1715,6 +1715,24 @@ function M.load(value, loadSettings)
 
                 local lfKeyframes = { }
 
+                local firstKf = keyframes[1]
+
+                if firstKf and firstKf.time > 0 then
+                    table.insert_unique(interpTypesIndices, "step")
+
+                    local keyValue = firstKf.value
+
+                    if relativize then
+                        keyValue = math_util.relativize_channel(relativizeKeyType, keyValue, node[channel])
+                    end
+
+                    lfKeyframes[1] = {
+                        [constants.KEY_VALUE_INDEX] = keyValue,
+                        [constants.KEY_TIME_INDEX] = 0,
+                        [constants.KEY_INTERP_TYPE_INDEX] = table.index(interpTypesIndices, "step")
+                    }
+                end
+
                 for i, keyframe in ipairs(keyframes) do
                     local nextKeyframe = keyframes[i + 1]
 
@@ -1784,7 +1802,7 @@ function M.load(value, loadSettings)
 
                     lfKeyframe[constants.KEY_INTERP_FIELDS_INDEX] = interpFields
 
-                    lfKeyframes[i] = lfKeyframe
+                    table.insert(lfKeyframes, lfKeyframe)
                 end
 
                 lfBoneKeyframes[gltfTargetPathToLiveframeChannelIndex[channel]] = lfKeyframes
@@ -1812,8 +1830,6 @@ function M.load(value, loadSettings)
 
         clips = clips
     }
-
-    file.write("export:temp", json.tostring(clipsMetadata))
 
     return clipsMetadata, {
         nodes = nodes,
