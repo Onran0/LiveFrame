@@ -13,8 +13,17 @@
 ### Одиночный режим
 
 Аргументы те же, что и в [clips_file_data](../objects/clips_file_data.md).
+Также поддерживается одиночный ввод строки с путём напрямую в `args` для удобства и краткости.
 
-Пример:
+Примеры:
+
+```json
+{
+    "name": "liveframe:player",
+    "args": "packid:animations/some_clips.lfa"
+}
+```
+
 ```json
 {
     "name": "liveframe:player",

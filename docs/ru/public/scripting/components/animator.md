@@ -12,7 +12,17 @@
 
 - `path` - путь к файлу с описанием аниматора.
 
-Пример:
+Также поддерживается одиночный ввод строки с путём напрямую в `args` для удобства и краткости.
+
+Примеры:
+
+```json
+{
+    "name": "liveframe:animator",
+    "args": "packid:animators/some_animator.json"
+}
+```
+
 ```json
 {
     "name": "liveframe:animator",

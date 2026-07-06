@@ -14,31 +14,10 @@
    limitations under the License.
 ]]--
 
-local FIELD_FILES = "files"
-
 local api = require "api"
 
-local skeleton = entity.skeleton
-
-local player
-
 if type(ARGS) == "string" then
-    player = api.create_player(skeleton, { path = ARGS })
+    api.load_model(entity, ARGS)
 else
-    if ARGS[FIELD_FILES] then
-        player = api.create_player(skeleton, ARGS)
-    elseif ARGS[FIELD_FILES] then
-        player = api.create_player(
-                skeleton,
-                unpack(ARGS[FIELD_FILES])
-        )
-    end
-end
-
-function get()
-    return player
-end
-
-function on_render(delta)
-    player:step(delta)
+    api.load_model(entity, ARGS["path"], ARGS["load-settings"])
 end

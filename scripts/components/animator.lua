@@ -14,11 +14,11 @@
    limitations under the License.
 ]]--
 
-local FIELD_PATH = "path"
-
 local api = require "api"
 
-local animator = api.load_animator(entity.skeleton, ARGS[FIELD_PATH])
+local animator = api.load_animator(entity.skeleton,
+        type(ARGS) == "string" and ARGS or ARGS["path"]
+)
 
 function get()
     return animator
