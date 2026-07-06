@@ -146,6 +146,12 @@ local KEY_TYPE_POSITION = 1
 local KEY_TYPE_ROTATION = 2
 local KEY_TYPE_SCALE = 3
 
+local LOCAL_KEY_TYPE_TO_RELATIVIZE = {
+    [KEY_TYPE_POSITION] = constants.RELATIVIZE_KEYS_POSITION,
+    [KEY_TYPE_ROTATION] = constants.RELATIVIZE_KEYS_ROTATION,
+    [KEY_TYPE_SCALE] = constants.RELATIVIZE_KEYS_SCALE
+}
+
 local quat_math = require "util/math/quat_math"
 
 local structure_parser = require "lfa/structure_parser"
@@ -355,12 +361,12 @@ local function loadFromTable(lfaTable, loadSettings)
     local bonesIndices = { }
 
     local eulerOrder = lfaTable.metadata.eulerOrder
-    local relativizeTransforms
+    local relativizeKeys
 
-    if loadSettings.relativizeTransforms ~= nil then
-        relativizeTransforms = loadSettings.relativizeTransforms
+    if loadSettings.relativizeKeys ~= nil then
+        relativizeKeys = loadSettings.relativizeKeys
     else
-        relativizeTransforms = lfaTable.metadata.relativizeTransforms
+        relativizeKeys = lfaTable.metadata.relativizeKeys
     end
 
     local skeleton = table.deep_copy(lfaTable.skeleton)
@@ -371,8 +377,6 @@ local function loadFromTable(lfaTable, loadSettings)
         else
             value.rotation = quat_math.normalize(quat_math.from_xyzw(value.rotation))
         end
-
-        value.invRotation = quat_math.conj(value.rotation)
     end
 
     local clips = { }
@@ -404,7 +408,7 @@ local function loadFromTable(lfaTable, loadSettings)
     local function getInterpTypeAndFields(
             rawType, -- possibly a custom interp id, as well as a default interp type
             target, -- interpolation target (vec3 or quat in example)
-            base, -- base for fields relativization (for rotation is inverted for higher load speed)
+            base, -- base for fields relativization
             keyTime, -- key time
             keyVal, -- value of key (may relativized),
             keyType,
@@ -420,18 +424,28 @@ local function loadFromTable(lfaTable, loadSettings)
 
             for name, value in pairs(lfaTable.interps[customId].fields) do
                 if target == TYPE_QUAT then
-                    value = quat_math.normalize(quat_math.from_xyzw(value))
+                    value = quat_math.from_xyzw(value)
+
+                    if type == analyzer.interpSquad then
+                        value = quat_math.normalize(value)
+                    end
                 end
 
-                if relativizeTransforms then
+                if table.has(relativizeKeys, LOCAL_KEY_TYPE_TO_RELATIVIZE[keyType]) then
                     if target == TYPE_QUAT then
-                        value = quat_math.mul(base, value)
+                        value = quat_math.mul(quat_math.conj(base.rotation), value)
 
-                        if quat_math.dot(value, keyVal) < 0 then
-                            value = quat_math.negate(value)
+                        if type == analyzer.interpSquad then
+                            if quat_math.dot(value, keyVal) < 0 then
+                                value = quat_math.negate(value)
+                            end
                         end
-                    elseif type == analyzer.interpCubicSpline and keyType == KEY_TYPE_SCALE then
-                        value = vec3.div(value, base)
+                    elseif type == analyzer.interpCubicSpline then
+                        if keyType == KEY_TYPE_SCALE then
+                            value = vec3.div(value, base.scale)
+                        elseif keyType == KEY_TYPE_POSITION then
+                            value = vec3.div(quat_math.rotate_vector(quat_math.conj(base.rotation), value), base.scale)
+                        end
                     end
                 end
 
@@ -554,10 +568,10 @@ local function loadFromTable(lfaTable, loadSettings)
 
                     addToKeys(
                             positionKeys, bonePosition,
-                            relativizeTransforms and
+                            table.has(relativizeKeys, constants.RELATIVIZE_KEYS_POSITION) and
                             vec3.sub(bonePosition.value, skeleton[boneName].position) or
                             bonePosition.value,
-                            skeleton[boneName].position,
+                            skeleton[boneName],
                             KEY_TYPE_POSITION
                     )
                 end
@@ -573,15 +587,15 @@ local function loadFromTable(lfaTable, loadSettings)
                         quatRot = quat_math.normalize(quat_math.from_xyzw(boneRotation.value))
                     end
 
-                    if relativizeTransforms then
+                    if table.has(relativizeKeys, constants.RELATIVIZE_KEYS_ROTATION) then
                         if quat_math.dot(quatRot, skeleton[boneName].rotation) < 0 then
                             quatRot = quat_math.negate(quatRot)
                         end
 
-                        quatRot = quat_math.mul(skeleton[boneName].invRotation, quatRot)
+                        quatRot = quat_math.mul(quat_math.conj(skeleton[boneName]), quatRot)
                     end
 
-                    addToKeys(rotationKeys, boneRotation, quatRot, skeleton[boneName].invRotation, KEY_TYPE_ROTATION)
+                    addToKeys(rotationKeys, boneRotation, quatRot, skeleton[boneName], KEY_TYPE_ROTATION)
 
                     local len = #rotationKeys
 
@@ -600,10 +614,10 @@ local function loadFromTable(lfaTable, loadSettings)
                     addInterpTypes(boneScale)
                     addToKeys(
                             scaleKeys, boneScale,
-                            relativizeTransforms and
+                            table.has(relativizeKeys, constants.RELATIVIZE_KEYS_SCALE) and
                             vec3.div(boneScale.value, skeleton[boneName].scale) or
                             boneScale.value,
-                            skeleton[boneName].scale,
+                            skeleton[boneName],
                             KEY_TYPE_SCALE
                     )
                 end
@@ -649,12 +663,12 @@ local function loadFromTable(lfaTable, loadSettings)
         boneBindPose.rotation = rotation
     end
 
-    place_default_bones_transforms(clips, bonesIndices, relativizeTransforms, lfaTable.skeleton)
+    place_default_bones_transforms(clips, bonesIndices, relativizeKeys, lfaTable.skeleton)
 
     return
     {
         metadata = {
-            relativizedTransforms = relativizeTransforms,
+            relativizedKeys = relativizeKeys,
             skeleton = lfaTable.skeleton
         },
         interpTypesIndices = interpTypesIndices,

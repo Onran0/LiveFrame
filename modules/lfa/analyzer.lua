@@ -108,6 +108,8 @@ output lfaTable structure:
 }
 ]]--
 
+local constants = require "general_constants"
+
 local CURRENT_VERSION = 1.0
 
 local SUPPORTED_VERSIONS = {
@@ -136,7 +138,7 @@ local SCALE_TYPE = "scale"
 
 local ATTR_VERSION = "version"
 local ATTR_EULER_ORDER = "euler-order"
-local ATTR_RELATIVIZE_TRANSFORMS = "relativize-transforms"
+local ATTR_RELATIVIZE_KEYS = "relativize-keys"
 
 local ATTR_POSITION = "position"
 local ATTR_ROTATION = "rotation"
@@ -246,7 +248,7 @@ local possibleAttributes = {
     [METADATA_TYPE] = {
         [ATTR_VERSION] = VALUE_TYPE_NUMBER,
         [ATTR_EULER_ORDER] = VALUE_TYPE_STRING,
-        [ATTR_RELATIVIZE_TRANSFORMS] = VALUE_TYPE_BOOLEAN
+        [ATTR_RELATIVIZE_KEYS] = { VALUE_TYPE_BOOLEAN, VALUE_TYPE_OTHER }
     },
     [SKELETON_TYPE] = { },
     [INTERP_TYPE] = {
@@ -441,10 +443,38 @@ local function analyzeElementSpecial(element, lfaTable)
                 end
             end
 
-            local relativizeTransforms = true
+            local finalRelativizeKeys = { }
 
-            if element.attributes[ATTR_RELATIVIZE_TRANSFORMS] ~= nil then
-                relativizeTransforms = element.attributes[ATTR_RELATIVIZE_TRANSFORMS]
+            if element.attributes[ATTR_RELATIVIZE_KEYS] ~= nil then
+                local relativizeKeys = element.attributes[ATTR_RELATIVIZE_KEYS]
+
+                if type(relativizeKeys) == "table" then
+                    local invalid = false
+
+                    if not is_array(relativizeKeys) then
+                        invalid = true
+                    else
+                        for _, keyType in ipairs(relativizeKeys) do
+                            if
+                                table.has(finalRelativizeKeys, keyType)
+                                or not table.has(constants.RELATIVIZE_KEY_TYPES, keyType)
+                            then
+                                invalid = true
+                                break
+                            end
+
+                            table.insert(finalRelativizeKeys, keyType)
+                        end
+                    end
+
+                    if invalid then
+                        error("invalid relativize-keys in metadata")
+                    end
+                elseif relativizeKeys then
+                    table.insert(finalRelativizeKeys, constants.RELATIVIZE_KEYS_POSITION)
+                    table.insert(finalRelativizeKeys, constants.RELATIVIZE_KEYS_ROTATION)
+                    table.insert(finalRelativizeKeys, constants.RELATIVIZE_KEYS_SCALE)
+                end
             end
 
             if element.children then
@@ -454,7 +484,7 @@ local function analyzeElementSpecial(element, lfaTable)
             lfaTable.metadata = {
                 version = version,
                 eulerOrder = eulerOrder or "xyz",
-                relativizeTransforms = relativizeTransforms
+                relativizeKeys = finalRelativizeKeys
             }
         else
             error("@metadata must be first element in file")

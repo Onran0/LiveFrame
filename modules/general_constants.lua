@@ -33,7 +33,14 @@ return {
     TARGET_VEC3 = 1,
     TARGET_QUAT = 2,
 
-    TARGETS = { 1, 2 }
+    TARGETS = { 1, 2 },
 
+    RELATIVIZE_KEYS_POSITION = "position",
+    RELATIVIZE_KEYS_ROTATION = "rotation",
+    RELATIVIZE_KEYS_SCALE = "scale",
+
+    RELATIVIZE_KEY_TYPES = {
+        "position", "rotation", "scale"
+    }
     --
 }

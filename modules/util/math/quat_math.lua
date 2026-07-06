@@ -92,6 +92,22 @@ function M.scale(q, s)
     }
 end
 
+function M.rotate_vector(q, v)
+    local w, x, y, z = q[1], q[2], q[3], q[4]
+    local vx, vy, vz = v[1], v[2], v[3]
+
+    -- t = 2 * (q.xyz × v)
+    local tx = 2 * (y * vz - z * vy)
+    local ty = 2 * (z * vx - x * vz)
+    local tz = 2 * (x * vy - y * vx)
+
+    return {
+        vx + w * tx + (y * tz - z * ty),
+        vy + w * ty + (z * tx - x * tz),
+        vz + w * tz + (x * ty - y * tx)
+    }
+end
+
 function M.log(q)
     local w, x, y, z = q[1], q[2], q[3], q[4]
 

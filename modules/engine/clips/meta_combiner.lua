@@ -57,7 +57,7 @@ function M.combine(clipsMetadataArray, overrideClipsNames)
     local combinedBonesIndices = { }
     local combinedClips = { }
 
-    local relativizedTransforms
+    local relativizedKeys
     local skeleton
 
     for clipsMetadataIndex, clipsMetadata in ipairs(clipsMetadataArray) do
@@ -67,11 +67,11 @@ function M.combine(clipsMetadataArray, overrideClipsNames)
 
             if not tablesEquals(skeleton, clipsMetadata.metadata.skeleton) then
                 error(prefMsg .. "different skeleton" .. postMsg)
-            elseif relativizedTransforms ~= clipsMetadata.metadata.relativizedTransforms then
+            elseif not tablesEquals(relativizedKeys, clipsMetadata.metadata.relativizedKeys)  then
                 error(prefMsg .. "different relativization" .. postMsg)
             end
         else
-            relativizedTransforms = clipsMetadata.metadata.relativizedTransforms
+            relativizedKeys = clipsMetadata.metadata.relativizedKeys
             skeleton = clipsMetadata.metadata.skeleton
         end
 
@@ -218,11 +218,11 @@ function M.combine(clipsMetadataArray, overrideClipsNames)
         end
     end
 
-    place_default_bones_transforms(combinedClips, combinedBonesIndices, relativizedTransforms, skeleton)
+    place_default_bones_transforms(combinedClips, combinedBonesIndices, relativizedKeys, skeleton)
 
     return {
         metadata = {
-            relativizedTransforms = relativizedTransforms,
+            relativizedKeys = relativizedKeys,
             skeleton = skeleton
         },
         interpTypesIndices = combinedInterpTypesIndices,
