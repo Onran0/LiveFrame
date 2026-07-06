@@ -1576,35 +1576,12 @@ local function loadSkeleton(nodes, skeletonName)
     assets.parse_model("vcm", content, "trash_model", skeletonName)
 end
 
-function M.setup_model(entity, loaderTemp)
-    local skeletonName = loaderTemp.skeletonName
-    local meshIndexToModelName = loaderTemp.meshIndexToModelName
-    local nodes = loaderTemp.nodes
-
-    entity:set_skeleton(skeletonName)
-
-    local rig = entity.skeleton
-
-    for _, node in ipairs(nodes) do
-        local ind = rig:index(node.uniqueName)
-
-        if node.mesh then
-            rig:set_model(ind, meshIndexToModelName[node.mesh])
-        end
-
-        rig:set_matrix(ind, mat4.mul(
-                mat4.from_quat(node.rotation),
-                mat4.scale(node.scale)
-        ))
-    end
-end
-
 function M.load(value, loadSettings)
     local data = M.extract_gltf_data(value, loadSettings)
     local nodes = data.nodes
     -- models
 
-    local meshIndexToModelName = { }
+    local meshes = { }
     local skeletonName = "lf_gltf_skeleton_" .. uniqueModelIndex
 
     for i, mesh in ipairs(data.meshes) do
@@ -1612,18 +1589,27 @@ function M.load(value, loadSettings)
 
         loadMeshAsModel(mesh, modelName)
 
-        meshIndexToModelName[i] = modelName
+        table.insert(meshes, modelName)
     end
 
     loadSkeleton(data.nodes, skeletonName)
 
     local metadataSkeleton = { }
+    local modelMetadataBones = { }
 
     for _, node in ipairs(nodes) do
         metadataSkeleton[node.uniqueName] = {
             position = node.translation,
             rotation = node.rotation,
             scale = node.scale
+        }
+
+        modelMetadataBones[node.uniqueName] = {
+            mesh = node.mesh,
+            matrix = mat4.mul(
+                    mat4.from_quat(node.rotation),
+                    mat4.scale(node.scale)
+            )
         }
     end
 
@@ -1824,10 +1810,15 @@ function M.load(value, loadSettings)
         clips = clips
     }
 
-    return clipsMetadata, {
-        nodes = nodes,
-        meshIndexToModelName = meshIndexToModelName,
-        skeletonName = skeletonName
+    local modelMetadata = {
+        skeleton = skeletonName,
+        meshes = meshes,
+        bones = modelMetadataBones
+    }
+
+    return {
+        clipsMetadata = clipsMetadata,
+        modelMetadata = modelMetadata
     }
 end
 

@@ -113,18 +113,6 @@ function M.load_from_path(filePath, loadSettings, noCache)
     return unpack(result)
 end
 
-function M.setup_model(filePath, entity, loaderTemp)
-    local ext = file.ext(filePath)
-
-    local loader = loaders[ext]
-
-    if not loader then
-        error("unsupported file format: " .. ext)
-    end
-
-    loader.funcs.setup_model(entity, loaderTemp)
-end
-
 function M.remove_from_cache(filePath, loadSettings)
     if cache[filePath] then
         if loadSettings ~= nil then

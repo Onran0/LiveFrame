@@ -671,16 +671,17 @@ local function loadFromTable(lfaTable, loadSettings)
 
     place_default_bones_transforms(clips, bonesIndices, relativizeKeys, lfaTable.skeleton)
 
-    return
-    {
-        metadata = {
-            relativizedKeys = relativizeKeys,
-            skeleton = lfaTable.skeleton
-        },
-        interpTypesIndices = interpTypesIndices,
-        interpFieldsIndices = interpFieldsIndices,
-        bonesIndices = bonesIndices,
-        clips = clips
+    return {
+        clipsMetadata = {
+            metadata = {
+                relativizedKeys = relativizeKeys,
+                skeleton = lfaTable.skeleton
+            },
+            interpTypesIndices = interpTypesIndices,
+            interpFieldsIndices = interpFieldsIndices,
+            bonesIndices = bonesIndices,
+            clips = clips
+        }
     }
 end
 

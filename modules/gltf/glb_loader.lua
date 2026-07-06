@@ -46,8 +46,6 @@ end
 
 local M = { }
 
-M.setup_model = gltf_loader.setup_model
-
 function M.load(stream, loadSettings)
     local magic, version, length = stream:read("<III")
 
