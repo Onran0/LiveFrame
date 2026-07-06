@@ -1,7 +1,7 @@
 {
   "id": "liveframe",
   "title": "LiveFrame",
-  "version": "0.1",
+  "version": "0.2",
   "creator": "Onran",
   "description": "Animation engine for VoxelCore"
 }
