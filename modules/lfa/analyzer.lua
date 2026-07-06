@@ -32,7 +32,7 @@ output lfaTable structure:
     metadata = {
         version = 1.0,
         eulerOrder = "xyz",
-        relativizeTransforms = true
+        relativizeKeys = true
     },
 
     skeleton = {
@@ -148,6 +148,7 @@ local ATTR_INTERP = "interp"
 
 local ATTR_NAME = "name"
 local ATTR_TIME = "time"
+local ATTR_TIME_ADD = "time-add"
 local ATTR_VALUE = "value"
 
 local ATTR_LOOP = "loop"
@@ -270,7 +271,8 @@ local possibleAttributes = {
         [ATTR_DURATION] = VALUE_TYPE_NUMBER
     },
     [KEYFRAME_TYPE] = {
-        [ATTR_TIME] = VALUE_TYPE_NUMBER
+        [ATTR_TIME] = VALUE_TYPE_NUMBER,
+        [ATTR_TIME_ADD] = VALUE_TYPE_NUMBER
     },
     [SCOPE_TYPE] = {
         [ATTR_INTERP] = VALUE_TYPE_OTHER
@@ -314,7 +316,7 @@ local requiredAttributes = {
     [INTERP_TYPE] = { ATTR_ID, ATTR_TYPE },
     [INTERP_FIELD_TYPE] = { ATTR_NAME, ATTR_VALUE },
     [CLIP_TYPE] = { ATTR_NAME },
-    [KEYFRAME_TYPE] = { ATTR_TIME },
+    [KEYFRAME_TYPE] = { },
     [SCOPE_TYPE] = { ATTR_INTERP },
     [BONE_TYPE] = { ATTR_NAME },
     [EVENT_TYPE] = { ATTR_NAME },
@@ -829,9 +831,23 @@ local function analyzeElementSpecial(element, lfaTable)
         local clipByElement = lfaTable.temp.clipByElement
         local clip = clipByElement[element]
 
-        local time = element.attributes[ATTR_TIME]
+        local errorPrefix = "(clip: " .. clip.name .. ")"
 
-        local errorPrefix = "(clip: " .. clip.name ..
+        local time
+
+        if element.attributes[ATTR_TIME] and element.attributes[ATTR_TIME_ADD] then
+            error(errorPrefix .. "'time' and 'time-add' must not both be defined in the same keyframe")
+        end
+
+        if element.attributes[ATTR_TIME] then
+            time = element.attributes[ATTR_TIME]
+        elseif element.attributes[ATTR_TIME_ADD] then
+            time = #clip.keyframes > 0 and clip.keyframes[#clip.keyframes].time or 0
+
+            time = time + element.attributes[ATTR_TIME_ADD]
+        end
+
+        errorPrefix = "(clip: " .. clip.name ..
                 ", keyframe time: " .. time .. ") "
 
         if not element.children or #element.children == 0 then
@@ -899,6 +915,20 @@ local function analyzeElementSpecial(element, lfaTable)
             local keyframe = element.children[i]
 
             local time = keyframe.attributes[ATTR_TIME]
+
+            if not time then
+                time = i == 1 and 0 or previousTime
+
+                local timeAdd = keyframe.attributes[ATTR_TIME_ADD]
+
+                if not timeAdd then
+                    error(errorPrefix .. "'time' or 'time-add' attribute must be define in keyframe")
+                elseif timeAdd < 0 then
+                    error(errorPrefix .. "'time-add' attribute of keyframe must be positive")
+                else
+                    time = time + timeAdd
+                end
+            end
 
             if time < 0 then
                 error(errorPrefix .. "negative keyframe time: " .. time)

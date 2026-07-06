@@ -481,7 +481,7 @@ local function loadFromTable(animatorTable)
         local status, res = xpcall(loader.load_from_path, util.include_traceback, fileInfo[FIELD_FILE], fileInfo[FIELD_LOAD_SETTINGS])
 
         if not status then
-            error("failed to load '" .. fileInfo[FIELD_FILE] .. "' animation clips file: " .. val)
+            error("failed to load '" .. fileInfo[FIELD_FILE] .. "' animation clips file: " .. res)
         end
 
         local clipsMetadata = res.clipsMetadata
