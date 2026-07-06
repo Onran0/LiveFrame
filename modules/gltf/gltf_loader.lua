@@ -1413,7 +1413,17 @@ local gltfTargetPathToLiveframeChannelIndex = {
     [targetScalePath] = animation_constants.SCALE_KEYS_INDEX
 }
 
+local function toDecimalNotation(n)
+    return string.format("%.17f", n):gsub("(%..-)0+$", "%1"):gsub("%.$", "")
+end
+
 local function loadMeshAsModel(mesh, modelName)
+    local attrsSortOrder = {
+        attrPosition,
+        attrTexCoord0,
+        attrNormal
+    }
+
     local content = { }
     local pos = 0
 
@@ -1426,7 +1436,22 @@ local function loadMeshAsModel(mesh, modelName)
 
         local attrsOffset = { }
 
-        for _, attribute in ipairs(primitive.attributes) do
+        local attrs = primitive.attributes
+
+        local attrsIndices = { }
+        local sortedAttrs = { }
+
+        for index, attribute in ipairs(attrs) do
+            attrsIndices[attribute.type] = index
+        end
+
+        for _, attrType in ipairs(attrsSortOrder) do
+            if attrsIndices[attrType] then
+                table.insert(sortedAttrs, attrs[attrsIndices[attrType]])
+            end
+        end
+
+        for _, attribute in ipairs(sortedAttrs) do
             local attrType = attribute.type
             local attrValues = attribute.values
 
@@ -1445,11 +1470,11 @@ local function loadMeshAsModel(mesh, modelName)
                         local value = attrValues[i]
 
                         content[pos + 1] = token
-                        content[pos + 2] = value[1]
+                        content[pos + 2] = toDecimalNotation(value[1])
                         content[pos + 3] = " "
-                        content[pos + 4] = value[2]
+                        content[pos + 4] = toDecimalNotation(value[2])
                         content[pos + 5] = " "
-                        content[pos + 6] = value[3]
+                        content[pos + 6] = toDecimalNotation(value[3])
                         content[pos + 7] = "\n"
 
                         pos = pos + 7
@@ -1463,9 +1488,9 @@ local function loadMeshAsModel(mesh, modelName)
                         end
 
                         content[pos + 1] = token
-                        content[pos + 2] = value[1]
+                        content[pos + 2] = toDecimalNotation(value[1])
                         content[pos + 3] = " "
-                        content[pos + 4] = value[2]
+                        content[pos + 4] = toDecimalNotation(value[2])
                         content[pos + 5] = "\n"
 
                         pos = pos + 5
