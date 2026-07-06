@@ -443,7 +443,7 @@ local function analyzeElementSpecial(element, lfaTable)
                 end
             end
 
-            local finalRelativizeKeys = { }
+            local finalRelativizeKeys = constants.RELATIVIZE_KEY_TYPES
 
             if element.attributes[ATTR_RELATIVIZE_KEYS] ~= nil then
                 local relativizeKeys = element.attributes[ATTR_RELATIVIZE_KEYS]

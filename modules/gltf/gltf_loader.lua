@@ -1646,7 +1646,19 @@ function M.load(value, loadSettings)
         }
     end
 
-    local relativizeKeys = loadSettings.relativizeKeys or { constants.RELATIVIZE_KEYS_POSITION }
+    local relativizeKeys
+
+    if loadSettings.relativizeKeys ~= nil then
+        if type(loadSettings.relativizeKeys) == "table" then
+            relativizeKeys = loadSettings.relativizeKeys
+        elseif loadSettings.relativizeKeys then
+            relativizeKeys = constants.RELATIVIZE_KEY_TYPES
+        else
+            relativizeKeys = { }
+        end
+    else
+        relativizeKeys = { constants.RELATIVIZE_KEYS_POSITION }
+    end
 
     local startTangentIndex, endTangentIndex = 1, 2
 

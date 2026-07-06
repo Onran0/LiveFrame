@@ -364,7 +364,13 @@ local function loadFromTable(lfaTable, loadSettings)
     local relativizeKeys
 
     if loadSettings.relativizeKeys ~= nil then
-        relativizeKeys = loadSettings.relativizeKeys
+        if type(loadSettings.relativizeKeys) == "table" then
+            relativizeKeys = loadSettings.relativizeKeys
+        elseif loadSettings.relativizeKeys then
+            relativizeKeys = constants.RELATIVIZE_KEY_TYPES
+        else
+            relativizeKeys = { }
+        end
     else
         relativizeKeys = lfaTable.metadata.relativizeKeys
     end
@@ -592,7 +598,7 @@ local function loadFromTable(lfaTable, loadSettings)
                             quatRot = quat_math.negate(quatRot)
                         end
 
-                        quatRot = quat_math.mul(quat_math.conj(skeleton[boneName]), quatRot)
+                        quatRot = quat_math.mul(quat_math.conj(skeleton[boneName].rotation), quatRot)
                     end
 
                     addToKeys(rotationKeys, boneRotation, quatRot, skeleton[boneName], KEY_TYPE_ROTATION)
