@@ -18,6 +18,9 @@ local quat_math = require "util/math/quat_math"
 local math_util = require "util/math/math_util"
 local constants = require "general_constants"
 
+local mat2 = require "util/math/mat2"
+local mat3 = require "util/math/mat3"
+
 local warnings = true
 
 local supportedVersion = "2.0"
@@ -233,6 +236,14 @@ local function deserializeAccessorElement(elementType, componentType, bytes, nor
                     return type(value) ~= "boolean" -- trick for simple remove padding bytes
                 end
         )
+
+        if elementType == MAT4 then
+            components = mat4.transpose(components)
+        elseif elementType == MAT3 then
+            components = mat3.transpose(components)
+        elseif elementType == MAT2 then
+            components = mat2.transpose(components)
+        end
     end
 
     if normalized then
@@ -565,7 +576,9 @@ function M.extract_gltf_data(rawJson, loadSettings)
                     error("node matrix present with translation/rotation/scale")
                 end
 
-                local decomposed = mat4.decompose(node.matrix)
+                local rightMatrix = mat4.transpose(node.matrix)
+                
+                local decomposed = mat4.decompose(rightMatrix)
 
                 if not decomposed then
                     error("not decomposable matrix defined in node")
@@ -574,7 +587,7 @@ function M.extract_gltf_data(rawJson, loadSettings)
                 destNodeTable.translation = decomposed.translation
                 destNodeTable.rotation = decomposed.quaternion
                 destNodeTable.scale = decomposed.scale
-                destNodeTable.matrix = node.matrix
+                destNodeTable.matrix = rightMatrix
             else
                 destNodeTable.matrix = mat4.mul(
                         mat4.mul(
